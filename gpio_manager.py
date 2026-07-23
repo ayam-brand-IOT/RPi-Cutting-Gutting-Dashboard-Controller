@@ -67,11 +67,18 @@ class GPIOManager(threading.Thread):
             raise RuntimeError("gpiozero n'est pas installé")
 
         for name, item in self.input_cfg.items():
-            pull_up = item.get("pull_up", True)
-            kwargs = {"pull_up": pull_up}
-            if pull_up is None:
-                kwargs["active_state"] = not item.get("active_low", False)
-            self.inputs[name] = DigitalInputDevice(int(item["pin"]), **kwargs)
+            if not item.get("enabled", True):
+                continue
+            try:
+                pull_up = item.get("pull_up", True)
+                kwargs = {"pull_up": pull_up}
+                if pull_up is None:
+                    kwargs["active_state"] = not item.get("active_low", False)
+                self.inputs[name] = DigitalInputDevice(int(item["pin"]), **kwargs)
+            except Exception as error:
+                # Une entrée de monitoring ne doit jamais empêcher les sorties
+                # CIP de sécurité de démarrer.
+                print(f"[GPIO] entrée {name} ignorée: {error}", flush=True)
 
         # Sécurité : toutes les électrovannes sont OFF avant de démarrer les cycles.
         for channel in self.channels.values():

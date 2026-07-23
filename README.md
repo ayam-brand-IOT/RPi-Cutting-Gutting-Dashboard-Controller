@@ -128,14 +128,32 @@ identifiants internes. Elles ne sont pas des tags à créer dans Ecava.
 ## Dashboard Pygame production
 
 L'écran privilégie les KPI opérateur : poissons/minute, personnes présentes,
-Good, Bad et éjections Belly. Les trips moteur déclenchent un bandeau rouge et
-les RPM restent visibles dans les cartes machine secondaires. La zone CIP ne
-montre que les trois sorties Raspberry Pi / CP-IO22.
+Good, Bad et éjections Belly. Chaque Gutting possède sa courbe de productivité
+glissante. Les trips moteur déclenchent un bandeau rouge et les RPM restent
+visibles dans les cartes machine secondaires. La zone CIP compacte ne montre
+que les trois sorties Raspberry Pi / CP-IO22. L'eau et l'électricité sont
+regroupées en bas avec leurs icônes et consommations jour/mois.
+
+Le retour Cutting machine utilise provisoirement les entrées BCM20
+(`cutting_motors_on`) et BCM21 (`cutting_motors_trip`) du CP-IO22, actives HIGH.
+Le statut reste visible près des CIP et un Trip Cutting rejoint immédiatement
+le bandeau d'alarme rouge global. Adapter les pins et la polarité au câblage.
 
 Le débit est calculé sur la variation des compteurs `fish_counter` pendant la
 fenêtre `dashboard.productivity_window_s`. Pour afficher le personnel, ajouter
 le registre `people_count` au `input_registers` du device choisi puis renseigner
 `dashboard.people_device` et `dashboard.people_key`.
+
+## Electricity meter et Water meter
+
+Deux devices provisoires sont fournis dans `config.yaml` : slaves 10 et 11,
+désactivés par défaut. Le lecteur accepte `uint16`, `int16`, `uint32`, `int32`
+et `float32`, avec `word_order`, `scale`, `offset` et `decimals`. Remplacer les
+adresses/types par ceux des notices puis passer chaque device à `enabled: true`.
+
+Les valeurs jour/mois et les états de connexion apparaissent automatiquement
+dans le dashboard et dans le JSON MQTT `factory/cutting-gutting/scada/state`.
+La page Ecava les lit toujours via le seul tag `machine_state_json`.
 
 ## Démarrage automatique
 

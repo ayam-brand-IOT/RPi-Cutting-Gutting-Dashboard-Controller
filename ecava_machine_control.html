@@ -44,6 +44,22 @@
     </article>
   </section>
 
+  <div class="section-title"><h2>Utilities</h2><span>Consommation secondaire — Modbus → MQTT</span></div>
+  <section class="grid">
+    <article class="card wide">
+      <div class="card-head"><h3>Électricité</h3><span class="badge" data-online="electricity_meter_connected">HORS LIGNE</span></div>
+      <div class="value-row"><span>Consommation du jour</span><b><span data-value="electricity_meter_energy_today_kwh">--</span> kWh</b></div>
+      <div class="value-row"><span>Consommation du mois</span><b><span data-value="electricity_meter_energy_month_kwh">--</span> kWh</b></div>
+      <div class="value-row"><span>Puissance actuelle</span><b><span data-value="electricity_meter_power_kw">--</span> kW</b></div>
+    </article>
+    <article class="card wide">
+      <div class="card-head"><h3>Eau</h3><span class="badge" data-online="water_meter_connected">HORS LIGNE</span></div>
+      <div class="value-row"><span>Consommation du jour</span><b><span data-value="water_meter_water_today_m3">--</span> m³</b></div>
+      <div class="value-row"><span>Consommation du mois</span><b><span data-value="water_meter_water_month_m3">--</span> m³</b></div>
+      <div class="value-row"><span>Débit actuel</span><b><span data-value="water_meter_flow_l_min">--</span> L/min</b></div>
+    </article>
+  </section>
+
   <div class="section-title"><h2>CIP — CP-IO22</h2><span>Valeur actuelle + commande opérateur</span></div>
   <section class="grid" id="cipCards"></section>
 
@@ -87,7 +103,7 @@ function safeValue(v){if(v===undefined||v===null||v===''||v==='unknown')return '
 function toast(text,bad){var e=document.getElementById('toast');e.textContent=text;e.className=bad?'error':'';e.style.display='block';window.clearTimeout(e.timer);e.timer=window.setTimeout(function(){e.style.display='none'},2800)}
 
 function consumeState(state){
-  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right'],i,name,d,key,p,cipMap,cip,cipKey;
+  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey;
   if(!state||typeof state!=='object')throw new Error('État JSON invalide');
   for(i=0;i<deviceNames.length;i++){
     name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;

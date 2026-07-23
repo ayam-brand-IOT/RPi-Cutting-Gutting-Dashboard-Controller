@@ -33,7 +33,12 @@ dashboard:
 gpio:
   enabled: true
   disable_waveshare_cip_on_start: true
-  inputs: {}
+  # Entrées BCM provisoires pour les retours contacteurs Cutting machine.
+  # Désactivées tant que les véritables entrées CP-IO22 ne sont pas confirmées.
+  # pull_up: false = entrée active HIGH. Adapter pins/polarité au câblage réel.
+  inputs:
+    cutting_motors_on:   {enabled: false, pin: 20, pull_up: false}
+    cutting_motors_trip: {enabled: false, pin: 21, pull_up: false}
   cip:
     gutting_left:  {pin: 17, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
     cutting:       {pin: 18, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
@@ -99,3 +104,34 @@ devices:
     label: Vision droite
     slave: 7
     enabled: true
+
+  # ADRESSES PROVISOIRES : remplacer selon la notice du compteur réel.
+  # Ce device reste désactivé pour éviter des timeouts tant qu'il n'est pas câblé.
+  electricity_meter:
+    enabled: false
+    label: Electricity meter
+    slave: 10
+    type: utility_meter
+    input_blocks:
+      - {address: 0, count: 6}
+    input_registers:
+      power_kw:          {address: 0, data_type: float32, word_order: big, decimals: 2}
+      energy_today_kwh:  {address: 2, data_type: float32, word_order: big, decimals: 2}
+      energy_month_kwh:  {address: 4, data_type: float32, word_order: big, decimals: 2}
+    holding_registers: {}
+    coils: {}
+
+  # ADRESSES PROVISOIRES : remplacer selon la notice du compteur réel.
+  water_meter:
+    enabled: false
+    label: Water meter
+    slave: 11
+    type: utility_meter
+    input_blocks:
+      - {address: 0, count: 6}
+    input_registers:
+      flow_l_min:       {address: 0, data_type: float32, word_order: big, decimals: 2}
+      water_today_m3:   {address: 2, data_type: float32, word_order: big, decimals: 3}
+      water_month_m3:   {address: 4, data_type: float32, word_order: big, decimals: 3}
+    holding_registers: {}
+    coils: {}

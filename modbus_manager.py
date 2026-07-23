@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import struct
 import threading
 import time
 import uuid
@@ -93,8 +94,8 @@ class ModbusManager(threading.Thread):
                     raw[start + offset] = value
 
             values = {
-                key: raw.get(int(address), 0)
-                for key, address in device.get("input_registers", {}).items()
+                key: self._decode_input(raw, spec)
+                for key, spec in device.get("input_registers", {}).items()
             }
             if "ejector_count_lo" in values:
                 values["ejector_count"] = (
@@ -114,6 +115,43 @@ class ModbusManager(threading.Thread):
                 )
         except Exception as error:
             self._set_offline(name, error)
+
+    @staticmethod
+    def _decode_input(raw, spec):
+        """Décode un registre simple ou un uint32/int32/float32 configurable."""
+        if not isinstance(spec, dict):
+            return raw.get(int(spec), 0)
+
+        address = int(spec["address"])
+        data_type = str(spec.get("data_type", "uint16")).lower()
+        scale = float(spec.get("scale", 1.0))
+        offset = float(spec.get("offset", 0.0))
+
+        if data_type in ("uint16", "int16"):
+            value = int(raw.get(address, 0))
+            if data_type == "int16" and value >= 0x8000:
+                value -= 0x10000
+        elif data_type in ("uint32", "int32", "float32"):
+            words = [int(raw.get(address, 0)), int(raw.get(address + 1, 0))]
+            if str(spec.get("word_order", "big")).lower() == "little":
+                words.reverse()
+            packed = struct.pack(">HH", *words)
+            if data_type == "float32":
+                value = struct.unpack(">f", packed)[0]
+            elif data_type == "int32":
+                value = struct.unpack(">i", packed)[0]
+            else:
+                value = struct.unpack(">I", packed)[0]
+        else:
+            raise ValueError(f"data_type non supporté: {data_type}")
+
+        value = value * scale + offset
+        decimals = spec.get("decimals")
+        if decimals is not None:
+            value = round(value, int(decimals))
+        if data_type.startswith(("uint", "int")) and scale == 1.0 and offset == 0.0:
+            return int(value)
+        return value
 
     @staticmethod
     def _parameter_blocks(specs):
