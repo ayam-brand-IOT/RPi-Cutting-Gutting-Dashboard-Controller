@@ -1,0 +1,6 @@
+pygame==2.6.1
+pymodbus>=3.6,<4
+pyserial>=3.5,<4
+paho-mqtt>=2.0,<3
+PyYAML>=6,<7
+gpiozero>=2,<3

@@ -1,0 +1,101 @@
+machine:
+  name: cutting-gutting
+  modbus_port: /dev/ttyUSB0
+  modbus_baud: 9600
+  modbus_timeout_s: 0.4
+  modbus_poll_s: 1.0
+  holding_poll_s: 10.0
+  modbus_silence_s: 0.05
+
+mqtt:
+  enabled: true
+  host: 192.168.100.69
+  port: 1883
+  username: "cfpp"
+  password: "Cfpp2021"
+  client_id: cutting-gutting-rpi
+  base_topic: factory/cutting-gutting
+  publish_s: 2.0
+  publish_scalar_topics: false
+  publish_legacy_json: false
+  tls: false
+
+dashboard:
+  fullscreen: true
+  fps: 15
+  productivity_window_s: 60
+  # Dès que le registre est ajouté au device, le dashboard l'affiche ici.
+  # Exemple : ajouter people_count: <adresse> dans input_registers du device.
+  people_device: vision_left
+  people_key: people_count
+
+# CP-IO22 : sorties NPN. Numérotation BCM (OUT1=17, OUT2=18, OUT3=19).
+gpio:
+  enabled: true
+  disable_waveshare_cip_on_start: true
+  inputs: {}
+  cip:
+    gutting_left:  {pin: 17, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
+    cutting:       {pin: 18, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
+    gutting_right: {pin: 19, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
+
+# Toutes les adresses ci-dessous sont des offsets zéro-based pour pymodbus.
+# 0 = 30001 pour Input Register, 0 = 40001 pour Holding Register.
+devices:
+  gutting_left:
+    enabled: true
+    label: Gutting gauche
+    slave: 3
+    type: gutting
+    input_blocks:
+      - {address: 0, count: 27}
+    input_registers:
+      rpm_blade: 0
+      rpm_wheel1: 1
+      rpm_wheel2: 2
+      ejector_count: 20
+      ejector_state: 21
+      cip_state: 22
+      motors_trip: 23
+      motors_on: 24
+      belt_on: 25
+      belly_on: 26
+    holding_registers:
+      eject_delay_ms: {address: 0, min: 0, max: 9999}
+      eject_duration_ms: {address: 1, min: 10, max: 5000}
+      eject_enable: {address: 2, min: 0, max: 1}
+      cip_on_ms: {address: 10, min: 100, max: 60000}
+      cip_off_ms: {address: 11, min: 100, max: 60000}
+      cip_enable: {address: 12, min: 0, max: 1}
+      ppr_blade: {address: 20, min: 1, max: 999}
+      ppr_wheel1: {address: 21, min: 1, max: 999}
+      ppr_wheel2: {address: 22, min: 1, max: 999}
+    coils: {}
+
+  vision_left:
+    enabled: true
+    label: Vision gauche
+    slave: 5
+    type: vision
+    input_blocks:
+      - {address: 0, count: 3}
+    input_registers:
+      fish_counter: 0
+      gutting_result: 1
+      ejected_fish: 2
+    holding_registers:
+      ml_model: {address: 0, min: 0, max: 20}
+    coils:
+      eject_enable: {address: 0}
+
+  gutting_right:
+    inherit: gutting_left
+    label: Gutting droite
+    slave: 6
+    enabled: true
+
+  vision_right:
+    inherit: vision_left
+    label: Vision droite
+    slave: 7
+    enabled: true

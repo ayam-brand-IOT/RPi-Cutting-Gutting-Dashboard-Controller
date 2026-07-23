@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cutting / Gutting Control</title>
+  <!-- API JavaScript Ecava IntegraXor : fournit getTag() et setTag(). -->
+  <script type="text/javascript" src="./system/scripts/igrX.js"></script>
+  <style>
+    :root{--bg:#07101d;--panel:#101d30;--panel2:#0b1727;--line:#263850;--text:#edf4fb;--muted:#8fa3ba;--green:#2ed091;--red:#f25f6b;--blue:#4b9fff;--amber:#ffb44a;--shadow:0 14px 34px rgba(0,0,0,.28)}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:linear-gradient(145deg,#07101d,#0b1727);color:var(--text);font-family:Inter,"Segoe UI",Arial,sans-serif}button,input{font:inherit}
+    header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:17px clamp(18px,3vw,46px);background:rgba(7,16,29,.94);border-bottom:1px solid var(--line)}
+    h1{font-size:clamp(20px,2.4vw,28px);margin:0;letter-spacing:.02em}main{max-width:1500px;margin:auto;padding:24px clamp(16px,2.6vw,42px) 60px}
+    .connection{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px rgba(242,95,107,.12)}.dot.ok{background:var(--green);box-shadow:0 0 0 4px rgba(46,208,145,.12)}
+    .section-title{display:flex;align-items:end;justify-content:space-between;margin:24px 0 13px}.section-title h2{font-size:18px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:15px}.card{grid-column:span 4;background:linear-gradient(145deg,var(--panel),#0d1929);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}.card.wide{grid-column:span 6}.card.small{grid-column:span 3}
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.card-head h3{font-size:17px;margin:0}.badge{padding:5px 9px;border-radius:20px;background:#26374c;color:var(--muted);font-size:11px;font-weight:700}.badge.online,.badge.active{color:var(--green);background:#123e31}.badge.fault{color:var(--red);background:#4a2029}
+    .rpm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:17px}.rpm{text-align:center;background:var(--panel2);border:1px solid #1e3046;border-radius:12px;padding:12px 5px}.rpm b{display:block;font-size:clamp(21px,2.4vw,31px);color:var(--blue)}.rpm span{font-size:10px;color:var(--muted);text-transform:uppercase}
+    .leds{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.led{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}.lamp{width:9px;height:9px;border-radius:50%;background:#415167}.lamp.on{background:var(--green);box-shadow:0 0 9px rgba(46,208,145,.55)}.lamp.alarm.on{background:var(--red);box-shadow:0 0 9px rgba(242,95,107,.55)}
+    .setting{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;gap:9px;padding:10px 0;border-top:1px solid rgba(38,56,80,.72)}.setting:first-of-type{border-top:0}.setting label{color:var(--muted);font-size:13px}.actual{min-width:74px;text-align:right;color:var(--amber);font-weight:700;font-size:13px}.actual small{font-weight:400;color:var(--muted)}
+    input[type=number]{width:112px;background:#071322;color:var(--text);border:1px solid #30445e;border-radius:9px;padding:9px 10px;outline:none}input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(75,159,255,.13)}
+    .apply{width:38px;height:36px;border:0;border-radius:9px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer}.apply:hover{filter:brightness(1.1)}.apply:active{transform:translateY(1px)}
+    .control{display:flex;align-items:center;justify-content:flex-end;gap:8px}.switch{position:relative;display:inline-block;flex:0 0 48px;width:48px;height:27px;vertical-align:middle}.switch input{display:none}.switch i{position:absolute;inset:0;border-radius:20px;background:#35475d;cursor:pointer;transition:.18s}.switch i:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;border-radius:50%;background:white;transition:.18s}.switch input:checked+i{background:var(--green)}.switch input:checked+i:before{transform:translateX(21px)}
+    .cip-state{display:flex;align-items:center;gap:9px;margin:0 0 13px;padding:10px 12px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:13px}.cip-state .lamp{width:11px;height:11px}
+    .value-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(38,56,80,.72);color:var(--muted)}.value-row b{color:var(--text)}
+    #toast{position:fixed;z-index:20;right:20px;bottom:20px;max-width:380px;padding:13px 16px;border-radius:11px;background:#173a5e;color:#fff;box-shadow:0 12px 30px #0008;display:none}#toast.error{background:#642631}
+    @media(max-width:1100px){.card,.card.wide{grid-column:span 6}.card.small{grid-column:span 6}}@media(max-width:680px){header{align-items:flex-start;flex-direction:column;gap:8px}.card,.card.wide,.card.small{grid-column:1/-1}.setting{grid-template-columns:1fr auto auto}.rpm b{font-size:23px}}
+  </style>
+</head>
+<body>
+<header><h1>Cutting / Gutting Machine</h1><div class="connection"><span id="apiDot" class="dot"></span><span id="apiStatus">Connexion IGX…</span><span>•</span><span id="clock">--:--:--</span></div></header>
+<main>
+  <div class="section-title"><h2>État des machines</h2><span>Actualisation toutes les secondes</span></div>
+  <section class="grid">
+    <article class="card wide" id="machine-left">
+      <div class="card-head"><h3>Gutting gauche</h3><span class="badge" data-online="gutting_left_connected">HORS LIGNE</span></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_left_rpm_blade">--</b><span>Lame RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel1">--</b><span>Roue 1 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel2">--</b><span>Roue 2 RPM</span></div></div>
+      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_left_motors_on"></i>Moteurs</div><div class="led"><i class="lamp alarm" data-led="gutting_left_motors_trip"></i>Trip moteur</div><div class="led"><i class="lamp" data-led="gutting_left_belt_on"></i>Convoyeur</div><div class="led"><i class="lamp" data-led="gutting_left_belly_on"></i>Belly sensor</div></div>
+    </article>
+    <article class="card wide" id="machine-right">
+      <div class="card-head"><h3>Gutting droite</h3><span class="badge" data-online="gutting_right_connected">HORS LIGNE</span></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_right_rpm_blade">--</b><span>Lame RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel1">--</b><span>Roue 1 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel2">--</b><span>Roue 2 RPM</span></div></div>
+      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_right_motors_on"></i>Moteurs</div><div class="led"><i class="lamp alarm" data-led="gutting_right_motors_trip"></i>Trip moteur</div><div class="led"><i class="lamp" data-led="gutting_right_belt_on"></i>Convoyeur</div><div class="led"><i class="lamp" data-led="gutting_right_belly_on"></i>Belly sensor</div></div>
+    </article>
+  </section>
+
+  <div class="section-title"><h2>CIP — CP-IO22</h2><span>Valeur actuelle + commande opérateur</span></div>
+  <section class="grid" id="cipCards"></section>
+
+  <div class="section-title"><h2>Paramètres Gutting</h2><span>Écriture individuelle sécurisée</span></div>
+  <section class="grid">
+    <article class="card wide"><div class="card-head"><h3>Gutting gauche</h3><span class="badge">SLAVE 3</span></div><div id="paramsLeft"></div></article>
+    <article class="card wide"><div class="card-head"><h3>Gutting droite</h3><span class="badge">SLAVE 6</span></div><div id="paramsRight"></div></article>
+  </section>
+
+  <div class="section-title"><h2>Vision / Jetson</h2><span>Paramètres et compteurs</span></div>
+  <section class="grid" id="visionCards"></section>
+</main>
+<div id="toast"></div>
+
+<script>
+/* ========================================================================
+   ADAPTATION ECAVA
+   Seulement deux tags IGX sont utilisés : un état JSON et une commande
+   encodée en base64(JSON), car cette version d'IGX refuse le JSON brut dans
+   setTag(). La RPi décode automatiquement la commande reçue par MQTT.
+   Les clés *_actual et *_cmd plus bas sont seulement des identifiants internes
+   de l'interface; elles ne doivent pas être créées comme tags Ecava.
+   ======================================================================== */
+/* Seulement ces deux tags Ecava sont nécessaires. */
+var STATE_TAG = 'machine_state_json';
+var COMMAND_TAG = 'machine_command_json';
+
+var CIP = [
+  {id:'left',name:'Gutting gauche',enableA:'cip_left_enable_actual',onA:'cip_left_on_actual',offA:'cip_left_off_actual',output:'cip_left_output',enableC:'cip_left_enable_cmd',onC:'cip_left_on_cmd',offC:'cip_left_off_cmd'},
+  {id:'cutting',name:'Cutting machine',enableA:'cip_cutting_enable_actual',onA:'cip_cutting_on_actual',offA:'cip_cutting_off_actual',output:'cip_cutting_output',enableC:'cip_cutting_enable_cmd',onC:'cip_cutting_on_cmd',offC:'cip_cutting_off_cmd'},
+  {id:'right',name:'Gutting droite',enableA:'cip_right_enable_actual',onA:'cip_right_on_actual',offA:'cip_right_off_actual',output:'cip_right_output',enableC:'cip_right_enable_cmd',onC:'cip_right_on_cmd',offC:'cip_right_off_cmd'}
+];
+var PARAMS = [
+  {key:'eject_delay',label:'Délai éjection',unit:'ms',min:0,max:9999}, {key:'eject_duration',label:'Durée éjection',unit:'ms',min:10,max:5000}, {key:'eject_enable',label:'Éjecteur activé',bool:true},
+  {key:'ppr_blade',label:'PPR lame',unit:'',min:1,max:999}, {key:'ppr_wheel1',label:'PPR roue 1',unit:'',min:1,max:999}, {key:'ppr_wheel2',label:'PPR roue 2',unit:'',min:1,max:999}
+];
+var latest = {}, apiReady = false;
+
+function isOn(v){return v===true || v===1 || v==='1' || String(v).toLowerCase()==='true' || String(v).toLowerCase()==='on'}
+function safeValue(v){if(v===undefined||v===null||v===''||v==='unknown')return '--';return v}
+function toast(text,bad){var e=document.getElementById('toast');e.textContent=text;e.className=bad?'error':'';e.style.display='block';window.clearTimeout(e.timer);e.timer=window.setTimeout(function(){e.style.display='none'},2800)}
+
+function consumeState(state){
+  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right'],i,name,d,key,p,cipMap,cip,cipKey;
+  if(!state||typeof state!=='object')throw new Error('État JSON invalide');
+  for(i=0;i<deviceNames.length;i++){
+    name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;
+    latest[name+'_connected']=d.connected?1:0;
+    for(key in d.values){if(Object.prototype.hasOwnProperty.call(d.values,key))latest[name+'_'+key]=d.values[key]}
+    for(key in d.parameters){
+      if(!Object.prototype.hasOwnProperty.call(d.parameters,key))continue;
+      p=key;if(p==='eject_delay_ms')p='eject_delay';if(p==='eject_duration_ms')p='eject_duration';
+      latest[name+'_'+p+'_actual']=d.parameters[key];
+    }
+  }
+  cipMap={gutting_left:'left',cutting:'cutting',gutting_right:'right'};
+  for(name in cipMap){
+    if(!Object.prototype.hasOwnProperty.call(cipMap,name))continue;
+    cip=state.rpi&&state.rpi.cip&&state.rpi.cip[name];if(!cip)continue;
+    cipKey='cip_'+cipMap[name]+'_';
+    latest[cipKey+'enable_actual']=cip.enable?1:0;
+    latest[cipKey+'on_actual']=cip.on_ms;
+    latest[cipKey+'off_actual']=cip.off_ms;
+    latest[cipKey+'output']=cip.output?1:0;
+  }
+}
+
+function readAllTags(){
+  var result,text,state;
+  if(typeof getTag!=='function'){setApi(false,'getTag() indisponible');return}
+  try{
+    result=getTag(STATE_TAG);
+    if(result&&result.value!==undefined)result=result.value;
+    if(typeof result==='string'){text=result.trim();if(!text)throw new Error('Tag JSON vide');state=JSON.parse(text)}else state=result;
+    consumeState(state);apiReady=true;setApi(true,'IGX connecté');render();
+  }catch(error){setApi(false,'JSON état invalide')}
+}
+
+function commandFromKey(key,value){
+  var match,side,parameter,device;
+  match=/^cip_(left|cutting|right)_(enable|on|off)_cmd$/.exec(key);
+  if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
+  match=/^(gutting_left|gutting_right|vision_left|vision_right)_(.+)_cmd$/.exec(key);
+  if(match){device=match[1];parameter=match[2];if(parameter==='eject_delay')parameter='eject_delay_ms';if(parameter==='eject_duration')parameter='eject_duration_ms';return {target:'modbus',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
+  throw new Error('Commande inconnue : '+key);
+}
+
+function jsonToBase64(data){
+  var json=JSON.stringify(data);
+  return btoa(unescape(encodeURIComponent(json)));
+}
+
+function writeCommand(key,value,min,max){
+  var command,payload;
+  if(typeof setTag!=='function'){toast('API IGX absente : vérifier igrX.js et ouvrir cette page depuis le serveur Ecava',true);return}
+  if(typeof value==='number' && (isNaN(value)||value<min||value>max)){toast('Valeur autorisée : '+min+' à '+max,true);return}
+  try{
+    command=commandFromKey(key,value);
+    command.timestamp=Date.now();
+    payload=jsonToBase64(command);
+    console.log('Commande JSON :',JSON.stringify(command));
+    console.log('Commande Base64 :',payload);
+    setTag(COMMAND_TAG,payload);
+    toast('Commande envoyée : '+value,false);
+  }catch(error){
+    console.error('Erreur writeCommand :',error);
+    toast('Échec commande : '+error.message,true);
+  }
+}
+function setApi(ok,text){document.getElementById('apiDot').className=ok?'dot ok':'dot';document.getElementById('apiStatus').textContent=text}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
+  var input=bool?'<label class="switch"><input type="checkbox" data-command="'+cmdKey+'"><i></i></label>':'<input type="number" data-command="'+cmdKey+'" min="'+min+'" max="'+max+'">';
+  return '<div class="setting"><label>'+esc(label)+'</label><span class="actual" data-value="'+actualKey+'">-- <small>'+esc(unit||'')+'</small></span><span class="control">'+input+'<button class="apply" data-apply="'+cmdKey+'" data-min="'+(min===undefined?'':min)+'" data-max="'+(max===undefined?'':max)+'">✓</button></span></div>';
+}
+function build(){
+  var cip=document.getElementById('cipCards'),html='',i,c,p;
+  for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DÉSACTIVÉ</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Sortie électrovanne</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('Temps ON',c.onA,c.onC,100,60000,'ms',false)+settingHtml('Temps OFF',c.offA,c.offC,100,60000,'ms',false)+'</article>'}
+  cip.innerHTML=html;
+  ['Left','Right'].forEach(function(side){var prefix='gutting_'+side.toLowerCase()+'_',target=document.getElementById('params'+side),out='';for(i=0;i<PARAMS.length;i++){p=PARAMS[i];out+=settingHtml(p.label,prefix+p.key+'_actual',prefix+p.key+'_cmd',p.min,p.max,p.unit,p.bool)}target.innerHTML=out});
+  var visions=[{id:'left',name:'Vision gauche',slave:5},{id:'right',name:'Vision droite',slave:7}];html='';for(i=0;i<visions.length;i++){c=visions[i];html+='<article class="card wide"><div class="card-head"><h3>'+c.name+'</h3><span class="badge" data-online="vision_'+c.id+'_connected">HORS LIGNE</span></div><div class="value-row"><span>Poissons détectés</span><b data-value="vision_'+c.id+'_fish_counter">--</b></div><div class="value-row"><span>Poissons éjectés</span><b data-value="vision_'+c.id+'_ejected_fish">--</b></div>'+settingHtml('Modèle ML','vision_'+c.id+'_ml_model_actual','vision_'+c.id+'_ml_model_cmd',0,20,'',false)+settingHtml('Éjection activée','vision_'+c.id+'_eject_enable_actual','vision_'+c.id+'_eject_enable_cmd',0,1,'',true)+'</article>'}document.getElementById('visionCards').innerHTML=html;
+  document.addEventListener('click',function(event){var button=event.target.closest('[data-apply]');if(!button)return;var key=button.getAttribute('data-apply'),input=document.querySelector('[data-command="'+key+'"]'),value=input.type==='checkbox'?(input.checked?1:0):Number(input.value),min=Number(button.getAttribute('data-min')),max=Number(button.getAttribute('data-max'));writeCommand(key,value,min,max)});
+}
+function render(){
+  var nodes=document.querySelectorAll('[data-value]'),i,key,v,input,badge;
+  for(i=0;i<nodes.length;i++){key=nodes[i].getAttribute('data-value');v=safeValue(latest[key]);if(nodes[i].querySelector('small'))nodes[i].childNodes[0].nodeValue=v+' ';else nodes[i].textContent=v}
+  nodes=document.querySelectorAll('[data-led]');for(i=0;i<nodes.length;i++){nodes[i].classList.toggle('on',isOn(latest[nodes[i].getAttribute('data-led')]))}
+  nodes=document.querySelectorAll('[data-online]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-online')]);nodes[i].textContent=v?'EN LIGNE':'HORS LIGNE';nodes[i].classList.toggle('online',v)}
+  nodes=document.querySelectorAll('[data-enabled]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-enabled')]);nodes[i].textContent=v?'ACTIVÉ':'DÉSACTIVÉ';nodes[i].classList.toggle('active',v)}
+  nodes=document.querySelectorAll('[data-command]');for(i=0;i<nodes.length;i++){input=nodes[i];if(document.activeElement===input||input.getAttribute('data-touched')==='1')continue;key=input.getAttribute('data-command').replace(/_cmd$/,'_actual');if(latest[key]!==undefined){if(input.type==='checkbox')input.checked=isOn(latest[key]);else input.value=latest[key]}}
+}
+document.addEventListener('input',function(e){if(e.target.hasAttribute('data-command'))e.target.setAttribute('data-touched','1')});
+build();readAllTags();window.setInterval(readAllTags,1000);window.setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-FR')},1000);
+</script>
+</body>
+</html>

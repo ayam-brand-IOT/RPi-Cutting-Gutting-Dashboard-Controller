@@ -1,0 +1,23 @@
+[Unit]
+Description=Cutting/Gutting machine supervisor
+After=network-online.target
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=lastra
+WorkingDirectory=/home/lastra/dashboard-Cutting-Gutting
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=PYGAME_HIDE_SUPPORT_PROMPT=1
+ExecStart=/home/lastra/dashboard-Cutting-Gutting/.venv-2/bin/python /home/lastra/dashboard-Cutting-Gutting/main.py --config /home/lastra/dashboard-Cutting-Gutting/config.yaml
+Restart=always
+RestartSec=3
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target
