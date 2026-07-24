@@ -20,6 +20,8 @@
     .setting{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;gap:9px;padding:10px 0;border-top:1px solid rgba(38,56,80,.72)}.setting:first-of-type{border-top:0}.setting label{color:var(--muted);font-size:13px}.actual{min-width:74px;text-align:right;color:var(--amber);font-weight:700;font-size:13px}.actual small{font-weight:400;color:var(--muted)}
     input[type=number]{width:112px;background:#071322;color:var(--text);border:1px solid #30445e;border-radius:9px;padding:9px 10px;outline:none}input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(75,159,255,.13)}
     .apply{width:38px;height:36px;border:0;border-radius:9px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer}.apply:hover{filter:brightness(1.1)}.apply:active{transform:translateY(1px)}
+    .action{border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:800;padding:11px 18px;cursor:pointer}.action.danger{background:var(--red)}.action:hover{filter:brightness(1.1)}
+    .break-grid{display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));gap:12px;margin:8px 0 17px}.break-grid label{font-size:11px;color:var(--muted);font-weight:700}.break-grid input{display:block;width:100%;margin-top:6px;background:#071322;color:var(--text);border:1px solid #30445e;border-radius:9px;padding:9px}
     .control{display:flex;align-items:center;justify-content:flex-end;gap:8px}.switch{position:relative;display:inline-block;flex:0 0 48px;width:48px;height:27px;vertical-align:middle}.switch input{display:none}.switch i{position:absolute;inset:0;border-radius:20px;background:#35475d;cursor:pointer;transition:.18s}.switch i:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;border-radius:50%;background:white;transition:.18s}.switch input:checked+i{background:var(--green)}.switch input:checked+i:before{transform:translateX(21px)}
     .cip-state{display:flex;align-items:center;gap:9px;margin:0 0 13px;padding:10px 12px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:13px}.cip-state .lamp{width:11px;height:11px}
     .value-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(38,56,80,.72);color:var(--muted)}.value-row b{color:var(--text)}
@@ -30,6 +32,25 @@
 <body>
 <header><h1>Cutting / Gutting Machine</h1><div class="connection"><span id="apiDot" class="dot"></span><span id="apiStatus">Connexion IGX…</span><span>•</span><span id="clock">--:--:--</span></div></header>
 <main>
+  <div class="section-title"><h2>Planning de production</h2><span>Configuration persistante sur la Raspberry Pi</span></div>
+  <section class="grid">
+    <article class="card wide">
+      <div class="card-head"><h3>Heures de pause</h3><span class="badge">4 PAUSES</span></div>
+      <div class="break-grid">
+        <label>Pause 1<input id="break1" type="time"></label>
+        <label>Pause 2<input id="break2" type="time"></label>
+        <label>Pause 3<input id="break3" type="time"></label>
+        <label>Pause 4<input id="break4" type="time"></label>
+      </div>
+      <button class="action" type="button" onclick="saveBreaks()">Enregistrer les pauses</button>
+    </article>
+    <article class="card wide">
+      <div class="card-head"><h3>Compteurs de production</h3><span class="badge fault">ZONE SENSIBLE</span></div>
+      <p style="color:var(--muted);line-height:1.5">Remet à zéro Total, Good, Bad, Belly et les historiques de productivité. Les paramètres Modbus et CIP ne sont pas modifiés.</p>
+      <button class="action danger" type="button" onclick="resetProductionData()">Remettre les compteurs à zéro</button>
+    </article>
+  </section>
+
   <div class="section-title"><h2>État des machines</h2><span>Actualisation toutes les secondes</span></div>
   <section class="grid">
     <article class="card wide" id="machine-left">
@@ -103,12 +124,20 @@ function safeValue(v){if(v===undefined||v===null||v===''||v==='unknown')return '
 function toast(text,bad){var e=document.getElementById('toast');e.textContent=text;e.className=bad?'error':'';e.style.display='block';window.clearTimeout(e.timer);e.timer=window.setTimeout(function(){e.style.display='none'},2800)}
 
 function consumeState(state){
-  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey;
+  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
   if(!state||typeof state!=='object')throw new Error('État JSON invalide');
+  offsets=state.rpi&&state.rpi.counter_offsets?state.rpi.counter_offsets:{};
   for(i=0;i<deviceNames.length;i++){
     name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;
     latest[name+'_connected']=d.connected?1:0;
-    for(key in d.values){if(Object.prototype.hasOwnProperty.call(d.values,key))latest[name+'_'+key]=d.values[key]}
+    for(key in d.values){
+      if(!Object.prototype.hasOwnProperty.call(d.values,key))continue;
+      raw=d.values[key];
+      if(key==='fish_counter'||key==='ejected_fish'||key==='ejector_count'){
+        raw=Math.max(0,Number(raw||0)-Number(offsets[name]&&offsets[name][key]||0));
+      }
+      latest[name+'_'+key]=raw;
+    }
     for(key in d.parameters){
       if(!Object.prototype.hasOwnProperty.call(d.parameters,key))continue;
       p=key;if(p==='eject_delay_ms')p='eject_delay';if(p==='eject_duration_ms')p='eject_duration';
@@ -124,6 +153,13 @@ function consumeState(state){
     latest[cipKey+'on_actual']=cip.on_ms;
     latest[cipKey+'off_actual']=cip.off_ms;
     latest[cipKey+'output']=cip.output?1:0;
+  }
+  breaks=state.rpi&&state.rpi.breaks?state.rpi.breaks:[];
+  for(i=0;i<4;i++){
+    input=document.getElementById('break'+(i+1));
+    if(input&&document.activeElement!==input&&input.getAttribute('data-touched')!=='1'){
+      input.value=breaks[i]||'';
+    }
   }
 }
 
@@ -150,6 +186,35 @@ function commandFromKey(key,value){
 function jsonToBase64(data){
   var json=JSON.stringify(data);
   return btoa(unescape(encodeURIComponent(json)));
+}
+
+function sendSystemCommand(parameters,successText){
+  if(typeof setTag!=='function')throw new Error('setTag() indisponible');
+  var command={target:'system',device:'rpi',parameters:parameters,timestamp:Date.now()};
+  var payload=jsonToBase64(command);
+  setTag(COMMAND_TAG,payload);
+  console.log('Commande système JSON :',JSON.stringify(command));
+  toast(successText,false);
+}
+
+function saveBreaks(){
+  var values=[],i,input;
+  try{
+    for(i=1;i<=4;i++){
+      input=document.getElementById('break'+i);
+      if(!input.value)throw new Error('Les 4 heures de pause sont obligatoires');
+      values.push(input.value);
+    }
+    values.sort();
+    sendSystemCommand({breaks:values},'Heures de pause envoyées');
+    for(i=1;i<=4;i++)document.getElementById('break'+i).removeAttribute('data-touched');
+  }catch(error){toast(error.message,true)}
+}
+
+function resetProductionData(){
+  if(!window.confirm('Remettre à zéro tous les compteurs de production ?'))return;
+  try{sendSystemCommand({reset_data:true},'Commande de remise à zéro envoyée')}
+  catch(error){toast(error.message,true)}
 }
 
 function writeCommand(key,value,min,max){
@@ -192,7 +257,7 @@ function render(){
   nodes=document.querySelectorAll('[data-enabled]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-enabled')]);nodes[i].textContent=v?'ACTIVÉ':'DÉSACTIVÉ';nodes[i].classList.toggle('active',v)}
   nodes=document.querySelectorAll('[data-command]');for(i=0;i<nodes.length;i++){input=nodes[i];if(document.activeElement===input||input.getAttribute('data-touched')==='1')continue;key=input.getAttribute('data-command').replace(/_cmd$/,'_actual');if(latest[key]!==undefined){if(input.type==='checkbox')input.checked=isOn(latest[key]);else input.value=latest[key]}}
 }
-document.addEventListener('input',function(e){if(e.target.hasAttribute('data-command'))e.target.setAttribute('data-touched','1')});
+document.addEventListener('input',function(e){if(e.target.hasAttribute('data-command')||e.target.type==='time')e.target.setAttribute('data-touched','1')});
 build();readAllTags();window.setInterval(readAllTags,1000);window.setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-FR')},1000);
 </script>
 </body>

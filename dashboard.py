@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import datetime
 import functools
 import time
 
@@ -57,6 +58,47 @@ def _value(device, key, default=0):
 
 def _device(snapshot, name):
     return snapshot.get("devices", {}).get(name, {})
+
+
+def _adjusted_counter(snapshot, device_name, key, raw_value):
+    raw = max(0, int(raw_value))
+    offset = int(
+        snapshot.get("rpi", {})
+        .get("counter_offsets", {})
+        .get(device_name, {})
+        .get(key, 0)
+    )
+    return raw - offset if raw >= offset else raw
+
+
+def _next_break(breaks):
+    now = datetime.datetime.now()
+    valid = []
+    for value in breaks or []:
+        try:
+            hour, minute = (int(part) for part in str(value).split(":", 1))
+            valid.append((hour, minute))
+        except (TypeError, ValueError):
+            continue
+    if not valid:
+        return "--:--", "non configurée"
+    valid.sort()
+    target = None
+    tomorrow = False
+    for hour, minute in valid:
+        candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate >= now:
+            target = candidate
+            break
+    if target is None:
+        hour, minute = valid[0]
+        target = (now + datetime.timedelta(days=1)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        tomorrow = True
+    remaining = max(0, int((target - now).total_seconds() // 60))
+    duration = f"{remaining // 60}h{remaining % 60:02d}" if remaining >= 60 else f"{remaining} min"
+    return target.strftime("%H:%M"), ("demain • " if tomorrow else "") + f"dans {duration}"
 
 
 class ProductivityMeter:
@@ -126,6 +168,35 @@ def _kpi(screen, rect, title, value, subtitle, color=TEXT, hero=False):
           False, "midbottom")
 
 
+def _people_kpi(screen, rect, people, cadence):
+    _panel(screen, rect)
+    _text(screen, "PERSONNES", (rect.x + 14, rect.y + 15), 10, MUTED, True)
+    _text(screen, "--" if people is None else people,
+          (rect.centerx, rect.y + 55), 32, CYAN if people is not None else MUTED,
+          True, "center")
+    pygame.draw.line(screen, LINE, (rect.x + 14, rect.y + 83),
+                     (rect.right - 14, rect.y + 83), 1)
+    _text(screen, "CADENCE / WORKER", (rect.centerx, rect.y + 99),
+          9, MUTED, True, "center")
+    cadence_text = "--" if cadence is None else f"{cadence:.1f}"
+    _text(screen, cadence_text, (rect.centerx, rect.y + 121),
+          19, BLUE if cadence is not None else MUTED, True, "center")
+    _text(screen, "fish/min", (rect.centerx, rect.bottom - 6),
+          8, MUTED, False, "midbottom")
+
+
+def _quality_kpi(screen, rect, title, count, total, color):
+    _panel(screen, rect)
+    compact = rect.w < 180
+    percentage = (100.0 * count / total) if total > 0 else 0.0
+    _text(screen, title.upper(), (rect.x + 14, rect.y + 15),
+          10 if compact else 12, MUTED, True)
+    _text(screen, f"{percentage:.1f}%", (rect.centerx, rect.centery + 2),
+          27 if compact else 32, color, True, "center")
+    _text(screen, f"{count} poissons", (rect.centerx, rect.bottom - 17),
+          9 if compact else 11, MUTED, False, "midbottom")
+
+
 def _alarm_banner(screen, rect, trips, offline):
     if trips:
         pygame.draw.rect(screen, RED_DARK, rect, border_radius=14)
@@ -189,31 +260,39 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
         _pill(screen, status_rect, "EN LIGNE", active=True)
 
     stats_width = rect.w - 20
-    stat_items = (("TOTAL JOUR", stats["total"], BLUE),
-                  ("GOOD", stats["good"], GREEN),
-                  ("BAD", stats["bad"], RED if stats["bad"] else MUTED),
-                  ("BELLY", stats["belly"], AMBER))
-    for index, (label, value, stat_color) in enumerate(stat_items):
+    total = stats["total"]
+    stat_items = (("TOTAL JOUR", stats["total"], None, BLUE),
+                  ("GOOD", stats["good"],
+                   100.0 * stats["good"] / total if total else 0.0, GREEN),
+                  ("BAD", stats["bad"],
+                   100.0 * stats["bad"] / total if total else 0.0,
+                   RED if stats["bad"] else MUTED),
+                  ("BELLY", stats["belly"],
+                   100.0 * stats["belly"] / total if total else 0.0, AMBER))
+    for index, (label, count, percentage, stat_color) in enumerate(stat_items):
         cx = rect.x + 10 + int(stats_width * (index + 0.5) / 4)
-        _text(screen, label, (cx, rect.y + 48), 9, MUTED, True, "center")
-        _text(screen, value, (cx, rect.y + 70), 20, stat_color, True, "center")
+        _text(screen, label, (cx, rect.y + 45), 9, MUTED, True, "center")
+        main_value = str(count) if percentage is None else f"{percentage:.1f}%"
+        _text(screen, main_value, (cx, rect.y + 66), 18, stat_color, True, "center")
+        _text(screen, "poissons" if percentage is None else f"{count} poissons",
+              (cx, rect.y + 84), 8, MUTED, False, "center")
 
     motor_on = bool(values.get("motors_on"))
     belt_on = bool(values.get("belt_on"))
     _text(screen, f"PRODUCTIVITÉ  {productivity:.1f} fish/min",
-          (rect.x + 14, rect.y + 94), 10, BLUE, True, "midleft")
+          (rect.x + 14, rect.y + 101), 10, BLUE, True, "midleft")
     _text(screen, "MOTEURS " + ("ON" if motor_on else "OFF"),
-          (rect.centerx - 42, rect.y + 94), 9,
+          (rect.centerx - 42, rect.y + 101), 9,
           GREEN if motor_on else MUTED, True, "midright")
     _text(screen, "BELT " + ("ON" if belt_on else "OFF"),
-          (rect.centerx + 5, rect.y + 94), 9,
+          (rect.centerx + 5, rect.y + 101), 9,
           GREEN if belt_on else MUTED, True, "midleft")
     _text(screen, "RPM  {} / {} / {}".format(
         values.get("rpm_blade", 0), values.get("rpm_wheel1", 0),
         values.get("rpm_wheel2", 0)),
-        (rect.right - 14, rect.y + 94), 9, MUTED, False, "midright")
+        (rect.right - 14, rect.y + 101), 9, MUTED, False, "midright")
 
-    graph = pygame.Rect(rect.x + 13, rect.y + 108, rect.w - 26, rect.h - 119)
+    graph = pygame.Rect(rect.x + 13, rect.y + 114, rect.w - 26, rect.h - 125)
     _sparkline(screen, graph, history, BLUE)
 
 
@@ -273,6 +352,54 @@ def _draw_bolt(screen, center, color):
     pygame.draw.polygon(screen, color, points)
 
 
+def _draw_weather_icon(screen, center, condition):
+    x, y = center
+    condition = str(condition or "unknown").lower()
+    rainy = any(word in condition for word in ("rain", "pluie", "storm", "orage"))
+    cloudy = rainy or any(
+        word in condition for word in ("cloud", "nuage", "overcast", "snow", "neige")
+    )
+    if not cloudy:
+        pygame.draw.circle(screen, AMBER, (x, y), 10)
+        for dx, dy in ((0, -17), (0, 17), (-17, 0), (17, 0),
+                       (-12, -12), (12, -12), (-12, 12), (12, 12)):
+            pygame.draw.line(screen, AMBER, (x + dx * 2 // 3, y + dy * 2 // 3),
+                             (x + dx, y + dy), 2)
+        return
+    cloud = (190, 204, 218)
+    pygame.draw.circle(screen, cloud, (x - 8, y + 1), 9)
+    pygame.draw.circle(screen, cloud, (x + 2, y - 4), 12)
+    pygame.draw.circle(screen, cloud, (x + 13, y + 2), 8)
+    pygame.draw.rect(screen, cloud, (x - 16, y, 36, 10), border_radius=5)
+    if rainy:
+        for dx in (-10, 0, 10):
+            pygame.draw.line(screen, BLUE, (x + dx, y + 13),
+                             (x + dx - 3, y + 20), 2)
+
+
+def _weather_widget(screen, rect, weather):
+    _panel(screen, rect, PANEL_2, LINE, 13)
+    condition = weather.get("condition", "unknown")
+    temperature = weather.get("temperature_c")
+    _draw_weather_icon(screen, (rect.x + 29, rect.centery), condition)
+    value = "--°C" if temperature is None else f"{temperature:.1f}°C"
+    _text(screen, value, (rect.x + 55, rect.y + 10), 21, TEXT, True)
+    label = "MÉTÉO" if condition in ("", "unknown") else condition.upper()
+    _text(screen, label[:15], (rect.x + 56, rect.bottom - 11),
+          9, MUTED, True, "bottomleft")
+
+
+def _break_widget(screen, rect, break_time, break_delay):
+    _panel(screen, rect, PANEL_2, LINE, 13)
+    pygame.draw.circle(screen, AMBER, (rect.x + 18, rect.centery), 6)
+    _text(screen, "PROCHAINE PAUSE", (rect.x + 31, rect.y + 10),
+          9, MUTED, True)
+    _text(screen, break_time, (rect.x + 31, rect.bottom - 10),
+          20, AMBER, True, "bottomleft")
+    _text(screen, break_delay, (rect.right - 12, rect.bottom - 12),
+          10, MUTED, False, "bottomright")
+
+
 def _utility_card(screen, rect, title, online, day_value, month_value, unit,
                   accent, icon):
     _panel(screen, rect, PANEL_2)
@@ -326,29 +453,54 @@ def run_dashboard(config, devices, state, stop_event):
             right = _device(snapshot, "vision_right")
             gut_left = _device(snapshot, "gutting_left")
             gut_right = _device(snapshot, "gutting_right")
-            total = int(_value(left, "fish_counter", 0)) + int(_value(right, "fish_counter", 0))
-            total_left = int(_value(left, "fish_counter", 0))
-            total_right = int(_value(right, "fish_counter", 0))
-            bad_left = int(_value(left, "ejected_fish", 0))
-            bad_right = int(_value(right, "ejected_fish", 0))
+            total_left = _adjusted_counter(
+                snapshot, "vision_left", "fish_counter", _value(left, "fish_counter", 0)
+            )
+            total_right = _adjusted_counter(
+                snapshot, "vision_right", "fish_counter", _value(right, "fish_counter", 0)
+            )
+            total = total_left + total_right
+            bad_left = _adjusted_counter(
+                snapshot, "vision_left", "ejected_fish", _value(left, "ejected_fish", 0)
+            )
+            bad_right = _adjusted_counter(
+                snapshot, "vision_right", "ejected_fish", _value(right, "ejected_fish", 0)
+            )
             bad = bad_left + bad_right
             good = max(0, total - bad)
             good_left = max(0, total_left - bad_left)
             good_right = max(0, total_right - bad_right)
-            belly_left = int(_value(gut_left, "ejector_count", 0))
-            belly_right = int(_value(gut_right, "ejector_count", 0))
+            belly_left = _adjusted_counter(
+                snapshot, "gutting_left", "ejector_count",
+                _value(gut_left, "ejector_count", 0),
+            )
+            belly_right = _adjusted_counter(
+                snapshot, "gutting_right", "ejector_count",
+                _value(gut_right, "ejector_count", 0),
+            )
             belly = belly_left + belly_right
-            fish_min_left = rate_left.update(int(_value(left, "fish_counter", 0)))
-            fish_min_right = rate_right.update(int(_value(right, "fish_counter", 0)))
+            fish_min_left = rate_left.update(total_left)
+            fish_min_right = rate_right.update(total_right)
             fish_min = fish_min_left + fish_min_right
             people = _people_count(snapshot, config)
+            cadence_worker = fish_min / people if people is not None and people > 0 else None
 
-            _text(screen, "PRODUCTION  •  CUTTING / GUTTING", (margin, 16), 23, TEXT, True)
-            _text(screen, time.strftime("%d/%m/%Y   %H:%M:%S"),
-                  (w - margin, 19), 15, MUTED, False, "topright")
+            _text(screen, "PRODUCTION  •  CUTTING / GUTTING", (margin, 13), 20, TEXT, True)
             mqtt_ok = snapshot.get("rpi", {}).get("mqtt_connected", False)
-            _pill(screen, pygame.Rect(w - margin - 105, 43, 105, 25),
+            _pill(screen, pygame.Rect(margin, 43, 105, 23),
                   "MQTT OK" if mqtt_ok else "MQTT OFF", active=mqtt_ok, fault=not mqtt_ok)
+            _text(screen, time.strftime("%H:%M:%S"),
+                  (w // 2, 4), 32, TEXT, True, "midtop")
+            _text(screen, time.strftime("%d/%m/%Y"),
+                  (w // 2, 45), 11, MUTED, False, "midtop")
+            break_time, break_delay = _next_break(
+                snapshot.get("rpi", {}).get("breaks", [])
+            )
+            weather_rect = pygame.Rect(w - margin - 162, 9, 162, 57)
+            pause_w = min(250, max(205, int(w * 0.19)))
+            pause_rect = pygame.Rect(weather_rect.x - gap - pause_w, 9, pause_w, 57)
+            _break_widget(screen, pause_rect, break_time, break_delay)
+            _weather_widget(screen, weather_rect, snapshot.get("weather", {}))
 
             trips = []
             offline = []
@@ -373,14 +525,19 @@ def run_dashboard(config, devices, state, stop_event):
             widths += [remaining // 3, remaining // 3, remaining - 2 * (remaining // 3)]
             titles = (("Productivité", f"{fish_min:.1f}", "poissons / minute", BLUE, True),
                       ("Total jour", total, "poissons aujourd'hui", CYAN, False),
-                      ("Personnes", "--" if people is None else people,
-                       "présentes", CYAN if people is not None else MUTED, False),
+                      ("Personnes", people, "", CYAN, False),
                       ("Good", good, "poissons conformes", GREEN, False),
                       ("Bad", bad, "éjections vision", RED if bad else AMBER, False),
                       ("Belly", belly, "éjections orientation", AMBER, False))
             x = margin
             for width, item in zip(widths, titles):
-                _kpi(screen, pygame.Rect(x, kpi_y, width, kpi_h), *item)
+                rect = pygame.Rect(x, kpi_y, width, kpi_h)
+                if item[0] == "Personnes":
+                    _people_kpi(screen, rect, people, cadence_worker)
+                elif item[0] in ("Good", "Bad", "Belly"):
+                    _quality_kpi(screen, rect, item[0], item[1], total, item[3])
+                else:
+                    _kpi(screen, rect, *item)
                 x += width + gap
 
             machine_y = kpi_y + kpi_h + gap

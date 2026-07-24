@@ -155,6 +155,44 @@ Les valeurs jour/mois et les états de connexion apparaissent automatiquement
 dans le dashboard et dans le JSON MQTT `factory/cutting-gutting/scada/state`.
 La page Ecava les lit toujours via le seul tag `machine_state_json`.
 
+## Heure, météo et cadence par worker
+
+Le dashboard affiche une grande horloge. Par défaut, le thread léger
+`WeatherManager` appelle Open-Meteo toutes les 10 minutes avec les coordonnées
+de la section `weather` et récupère `temperature_2m` et `weather_code`. Aucune
+clé API n'est nécessaire. Les coordonnées fournies sont celles de Taiping et
+doivent être remplacées si la machine se trouve ailleurs.
+
+La météo peut aussi être remplacée par MQTT sur le topic défini par
+`mqtt.weather_topic` (par défaut `factory/cutting-gutting/weather`). Le payload
+peut être `{"temperature_c":27.4,"condition":"cloudy"}` ou une température
+simple. Un message retained est accepté pour disposer d'une valeur au boot.
+
+La cadence par worker est calculée en temps réel avec
+`productivité_totale_poissons_minute / personnes_présentes`. Elle affiche `--`
+si le compteur de personnes est absent ou égal à zéro. En attendant un registre
+Modbus, le nombre peut être publié en retained sur
+`factory/cutting-gutting/people_count` sous forme scalaire (`7`) ou JSON
+(`{"people_count":7}`).
+
+Les indicateurs Good, Bad et Belly sont affichés en pourcentage du nombre total
+de poissons correspondant. Le compteur brut reste visible en petit sous chaque
+pourcentage. Le même calcul est appliqué au total général et séparément à
+chaque Gutting.
+
+## Pauses et remise à zéro
+
+Les quatre pauses par défaut sont définies dans `schedule.breaks`. Ecava envoie
+leur modification avec une commande `target: system`; la RPi les trie, les
+valide puis les sauvegarde dans `runtime_settings.json`. Pygame affiche l'heure
+de la prochaine pause et le temps restant, en passant automatiquement à la
+première pause du lendemain après la dernière pause.
+
+Le Reset Ecava capture les compteurs courants comme offsets logiciels. Il remet
+à zéro les statistiques affichées et les courbes, sans écrire dans les
+registres Modbus et sans modifier les réglages CIP. Les offsets sont persistants
+et également publiés dans le JSON MQTT d'état.
+
 ## Démarrage automatique
 
 ```bash

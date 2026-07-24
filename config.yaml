@@ -6,6 +6,7 @@ machine:
   modbus_poll_s: 1.0
   holding_poll_s: 10.0
   modbus_silence_s: 0.05
+  runtime_settings_file: runtime_settings.json
 
 mqtt:
   enabled: true
@@ -15,6 +16,8 @@ mqtt:
   password: "Cfpp2021"
   client_id: cutting-gutting-rpi
   base_topic: factory/cutting-gutting
+  weather_topic: factory/cutting-gutting/weather
+  people_topic: factory/cutting-gutting/people_count
   publish_s: 2.0
   publish_scalar_topics: false
   publish_legacy_json: false
@@ -28,6 +31,17 @@ dashboard:
   # Exemple : ajouter people_count: <adresse> dans input_registers du device.
   people_device: vision_left
   people_key: people_count
+
+# Open-Meteo, sans clé API. Coordonnées par défaut : Taiping, Malaysia.
+weather:
+  enabled: true
+  latitude: 4.8500
+  longitude: 100.7400
+  update_s: 600
+  timeout_s: 8
+
+schedule:
+  breaks: ["09:00", "12:00", "15:00", "18:00"]
 
 # CP-IO22 : sorties NPN. Numérotation BCM (OUT1=17, OUT2=18, OUT3=19).
 gpio:

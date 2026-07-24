@@ -15,6 +15,8 @@ class MQTTManager(threading.Thread):
         self.cfg, self.devices, self.state = config, devices, state
         self.modbus, self.gpio, self.stop_event = modbus, gpio, stop_event
         self.base = config["base_topic"].rstrip("/")
+        self.weather_topic = config.get("weather_topic", f"{self.base}/weather")
+        self.people_topic = config.get("people_topic", f"{self.base}/people_count")
         try:
             self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                       client_id=config.get("client_id", "machine-rpi"))
@@ -36,6 +38,8 @@ class MQTTManager(threading.Thread):
         client.subscribe(f"{self.base}/cip/+/set", qos=1)
         client.subscribe(f"{self.base}/cmd/#", qos=1)
         client.subscribe(f"{self.base}/scada/command", qos=1)
+        client.subscribe(self.weather_topic, qos=0)
+        client.subscribe(self.people_topic, qos=0)
 
     def _on_disconnect(self, client, userdata, *args):
         self.state.set_mqtt_connected(False)
@@ -44,6 +48,10 @@ class MQTTManager(threading.Thread):
         self.publish_ack({"device": device, "status": "rejected", **payload})
 
     def _on_message(self, client, userdata, message):
+        if message.topic == self.weather_topic:
+            return self._on_weather(message.payload)
+        if message.topic == self.people_topic:
+            return self._on_people(message.payload)
         if message.retain:
             return
         relative = message.topic[len(self.base):].strip("/").split("/")
@@ -88,6 +96,35 @@ class MQTTManager(threading.Thread):
                               "parameter": parameter, "status": "queued"})
         except Exception as exc:
             self._reject(device_name, {"reason": str(exc)})
+
+    def _on_weather(self, payload):
+        try:
+            text = payload.decode("utf-8").strip()
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                data = {"temperature_c": float(text), "condition": "unknown"}
+            if not isinstance(data, dict):
+                raise ValueError("objet JSON attendu")
+            temperature = data.get("temperature_c", data.get("temp_c", data.get("temp")))
+            temperature = None if temperature is None else round(float(temperature), 1)
+            condition = data.get("condition", data.get("weather", "unknown"))
+            self.state.update_weather(temperature, condition)
+        except Exception as error:
+            print(f"[MQTT] météo invalide: {error}", flush=True)
+
+    def _on_people(self, payload):
+        try:
+            text = payload.decode("utf-8").strip()
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                data = text
+            if isinstance(data, dict):
+                data = data.get("people_count", data.get("workers"))
+            self.state.update_people_count(data)
+        except Exception as error:
+            print(f"[MQTT] nombre de workers invalide: {error}", flush=True)
 
     @staticmethod
     def _scalar(payload):
@@ -197,8 +234,30 @@ class MQTTManager(threading.Thread):
                         "device": device_name, "parameter": parameter, "value": value
                     }))
                     accepted[parameter] = value
+            elif target == "system":
+                if device_name not in ("rpi", "system"):
+                    raise ValueError("device system doit être rpi")
+                unknown = set(parameters) - {"breaks", "reset_data"}
+                if unknown:
+                    raise ValueError(f"paramètre système inconnu: {sorted(unknown)[0]}")
+                if "breaks" in parameters:
+                    breaks = parameters["breaks"]
+                    if not isinstance(breaks, list) or len(breaks) != 4:
+                        raise ValueError("breaks doit contenir exactement 4 horaires")
+                    normalized = []
+                    for value in breaks:
+                        parsed = time.strptime(str(value), "%H:%M")
+                        normalized.append(time.strftime("%H:%M", parsed))
+                    normalized.sort()
+                    self.state.update_breaks(normalized)
+                    accepted["breaks"] = normalized
+                if "reset_data" in parameters:
+                    if parameters["reset_data"] not in (1, True):
+                        raise ValueError("reset_data doit valoir true ou 1")
+                    self.state.reset_data()
+                    accepted["reset_data"] = True
             else:
-                raise ValueError("target doit être cip ou modbus")
+                raise ValueError("target doit être cip, modbus ou system")
 
             ack = {
                 "status": "accepted", "target": target, "device": device_name,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import signal
 import threading
+from pathlib import Path
 
 from config_loader import load_config
 from dashboard import run_dashboard
@@ -11,6 +12,7 @@ from gpio_manager import GPIOManager
 from modbus_manager import ModbusManager
 from mqtt_manager import MQTTManager
 from state import StateStore
+from weather_manager import WeatherManager
 
 
 def main():
@@ -29,15 +31,25 @@ def main():
     if args.windowed:
         cfg["dashboard"]["fullscreen"] = False
     stop_event = threading.Event()
-    state = StateStore(list(cfg["devices"]))
+    settings_path = Path(args.config).resolve().parent / cfg["machine"].get(
+        "runtime_settings_file", "runtime_settings.json"
+    )
+    state = StateStore(
+        list(cfg["devices"]),
+        cfg.get("schedule", {}).get("breaks"),
+        settings_path,
+    )
     modbus = ModbusManager(cfg["machine"], cfg["devices"], state, stop_event)
     gpio = None
     if cfg.get("gpio", {}).get("enabled") is True:
         gpio = GPIOManager(cfg["gpio"], state, stop_event)
     mqtt_thread = None
+    weather_thread = None
 
     if cfg["mqtt"].get("enabled", True) and not args.no_mqtt:
         mqtt_thread = MQTTManager(cfg["mqtt"], cfg["devices"], state, modbus, gpio, stop_event)
+    if cfg.get("weather", {}).get("enabled", False):
+        weather_thread = WeatherManager(cfg["weather"], state, stop_event)
     def modbus_ack(payload):
         state.update_command(payload)
         if mqtt_thread:
@@ -61,11 +73,13 @@ def main():
         gpio.start()
     if mqtt_thread:
         mqtt_thread.start()
+    if weather_thread:
+        weather_thread.start()
     try:
         run_dashboard(cfg["dashboard"], cfg["devices"], state, stop_event)
     finally:
         stop_event.set()
-        for worker in (modbus, gpio, mqtt_thread):
+        for worker in (modbus, gpio, mqtt_thread, weather_thread):
             if worker:
                 worker.join(timeout=3)
 

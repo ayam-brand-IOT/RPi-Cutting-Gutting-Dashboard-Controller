@@ -104,6 +104,30 @@ def main():
     assert modbus.command["parameter"] == "eject_enable"
     assert modbus.command["value"] == 1
 
+    manager._on_weather(b'{"temperature_c":27.4,"condition":"cloudy"}')
+    weather = manager.state.snapshot()["weather"]
+    assert weather["temperature_c"] == 27.4
+    assert weather["condition"] == "cloudy"
+    manager._on_people(b'7')
+    assert manager.state.snapshot()["rpi"]["people_count"] == 7
+    manager.state.update_device(
+        "gutting_left", True, {"ejector_count": 12}
+    )
+    manager._on_scada_json(json.dumps({
+        "target": "system", "device": "rpi",
+        "parameters": {"breaks": ["15:00", "09:00", "18:00", "12:00"]},
+    }).encode())
+    assert manager.state.snapshot()["rpi"]["breaks"] == [
+        "09:00", "12:00", "15:00", "18:00"
+    ]
+    manager._on_scada_json(json.dumps({
+        "target": "system", "device": "rpi",
+        "parameters": {"reset_data": True},
+    }).encode())
+    rpi = manager.state.snapshot()["rpi"]
+    assert rpi["counter_offsets"]["gutting_left"]["ejector_count"] == 12
+    assert rpi["reset_sequence"] == 1
+
     snapshot = manager.state.snapshot()
     snapshot["rpi"]["cip"] = {"gutting_left": {
         "enable": True, "on_ms": 500, "off_ms": 8000, "output": False,
