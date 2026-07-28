@@ -17,6 +17,8 @@ class MQTTManager(threading.Thread):
         self.base = config["base_topic"].rstrip("/")
         self.weather_topic = config.get("weather_topic", f"{self.base}/weather")
         self.people_topic = config.get("people_topic", f"{self.base}/people_count")
+        self._connected = threading.Event()
+        self._last_disconnect_reason = None
         try:
             self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                       client_id=config.get("client_id", "machine-rpi"))
@@ -30,9 +32,32 @@ class MQTTManager(threading.Thread):
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        # Paho retente automatiquement tant que sa boucle réseau tourne.
+        # Le délai augmente progressivement afin de ne pas saturer le réseau
+        # lorsque le PC hébergeant Mosquitto est arrêté.
+        if hasattr(self.client, "reconnect_delay_set"):
+            self.client.reconnect_delay_set(
+                min_delay=max(1, int(config.get("reconnect_min_s", 2))),
+                max_delay=max(2, int(config.get("reconnect_max_s", 30))),
+            )
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
+        is_failure = getattr(reason_code, "is_failure", None)
+        failed = bool(is_failure) if is_failure is not None else int(reason_code) != 0
+        if failed:
+            self._connected.clear()
+            self.state.set_mqtt_connected(False)
+            print(f"[MQTT] connexion refusée: {reason_code}", flush=True)
+            return
+
+        first_connection = not self._connected.is_set()
+        self._connected.set()
         self.state.set_mqtt_connected(True)
+        if first_connection:
+            print(
+                f"[MQTT] ONLINE {self.cfg['host']}:{int(self.cfg.get('port', 1883))}",
+                flush=True,
+            )
         client.publish(f"{self.base}/status", "online", qos=1, retain=True)
         client.subscribe(f"{self.base}/+/parameter/set", qos=1)
         client.subscribe(f"{self.base}/cip/+/set", qos=1)
@@ -42,7 +67,15 @@ class MQTTManager(threading.Thread):
         client.subscribe(self.people_topic, qos=0)
 
     def _on_disconnect(self, client, userdata, *args):
+        self._connected.clear()
         self.state.set_mqtt_connected(False)
+        reason = args[-2] if len(args) >= 2 else (args[-1] if args else "inconnue")
+        if reason != self._last_disconnect_reason:
+            print(
+                f"[MQTT] OFFLINE ({reason}) — reconnexion automatique en cours",
+                flush=True,
+            )
+            self._last_disconnect_reason = reason
 
     def _reject(self, device, payload):
         self.publish_ack({"device": device, "status": "rejected", **payload})
@@ -362,11 +395,22 @@ class MQTTManager(threading.Thread):
             )
 
     def run(self):
-        self.client.connect_async(self.cfg["host"], int(self.cfg.get("port", 1883)), 30)
+        host = self.cfg["host"]
+        port = int(self.cfg.get("port", 1883))
+        keepalive = int(self.cfg.get("keepalive_s", 30))
+        print(
+            f"[MQTT] broker {host}:{port} — reconnexion automatique activée",
+            flush=True,
+        )
+        self.client.connect_async(host, port, keepalive)
         self.client.loop_start()
         publish_s = float(self.cfg.get("publish_s", 2.0))
         try:
             while not self.stop_event.wait(publish_s):
+                # Ne pas remplir la file interne Paho pendant une longue
+                # coupure. Un état complet retained sera envoyé dès le retour.
+                if not self._connected.is_set():
+                    continue
                 snapshot = self.state.snapshot()
                 if self.cfg.get("publish_scalar_topics", False):
                     self._publish_scalar_state(snapshot)
@@ -386,6 +430,9 @@ class MQTTManager(threading.Thread):
                         self.client.publish(f"{self.base}/cip/{name}/state",
                                             json.dumps(data, separators=(",", ":")), qos=0, retain=True)
         finally:
-            self.client.publish(f"{self.base}/status", "offline", qos=1, retain=True)
+            if self._connected.is_set():
+                self.client.publish(f"{self.base}/status", "offline", qos=1, retain=True)
+            self._connected.clear()
+            self.state.set_mqtt_connected(False)
             self.client.loop_stop()
             self.client.disconnect()

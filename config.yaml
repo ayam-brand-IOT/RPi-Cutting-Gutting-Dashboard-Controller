@@ -19,13 +19,16 @@ mqtt:
   weather_topic: factory/cutting-gutting/weather
   people_topic: factory/cutting-gutting/people_count
   publish_s: 2.0
+  keepalive_s: 30
+  reconnect_min_s: 2
+  reconnect_max_s: 30
   publish_scalar_topics: false
   publish_legacy_json: false
   tls: false
 
 dashboard:
   fullscreen: true
-  fps: 15
+  fps: 3
   productivity_window_s: 60
   # Dès que le registre est ajouté au device, le dashboard l'affiche ici.
   # Exemple : ajouter people_count: <adresse> dans input_registers du device.
