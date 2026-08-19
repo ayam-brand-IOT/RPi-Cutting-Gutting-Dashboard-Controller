@@ -11,7 +11,9 @@ from pymodbus.client import ModbusSerialClient
 
 
 # Les timeouts des slaves absents sont gérés et affichés par appareil.
-logging.getLogger("pymodbus").setLevel(logging.ERROR)
+for _log in ("pymodbus", "pymodbus.client", "pymodbus.client.serial",
+             "pymodbus.transaction", "pymodbus.factory"):
+    logging.getLogger(_log).setLevel(logging.CRITICAL)
 
 
 class ModbusManager(threading.Thread):
@@ -32,8 +34,8 @@ class ModbusManager(threading.Thread):
             port=self.cfg["modbus_port"],
             baudrate=int(self.cfg.get("modbus_baud", 9600)),
             bytesize=8,
-            parity="N",
-            stopbits=1,
+            parity=str(self.cfg.get("modbus_parity", "N")),
+            stopbits=int(self.cfg.get("modbus_stopbits", 1)),
             timeout=float(self.cfg.get("modbus_timeout_s", 0.4)),
             retries=0,
         )

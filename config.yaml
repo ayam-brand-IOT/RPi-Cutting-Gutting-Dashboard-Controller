@@ -1,7 +1,9 @@
 machine:
   name: cutting-gutting
-  modbus_port: /dev/ttyUSB0
+  modbus_port: /dev/serial0
   modbus_baud: 9600
+  modbus_parity: N
+  modbus_stopbits: 1
   modbus_timeout_s: 0.4
   modbus_poll_s: 1.0
   holding_poll_s: 10.0
@@ -70,29 +72,41 @@ devices:
     slave: 3
     type: gutting
     input_blocks:
-      - {address: 0, count: 27}
+      - {address: 0, count: 19}
     input_registers:
       rpm_blade: 0
       rpm_wheel1: 1
       rpm_wheel2: 2
-      ejector_count: 20
-      ejector_state: 21
-      cip_state: 22
-      motors_trip: 23
-      motors_on: 24
-      belt_on: 25
-      belly_on: 26
+      inputs_mask: 3
+      outputs_mask: 4
+      ejector_state: 5
+      ejector_count_lo: 6
+      ejector_count_hi: 7
+      cip_state: 8
+      motors_trip: 9
+      motors_on: 10
+      belt_on: 11
+      belly_on: 12
+      alarm_mask: 13
+      alarm_unack: 14
+      sys_state: 15
+      uptime_lo: 16
+      uptime_hi: 17
+      fw_version: 18
     holding_registers:
       eject_delay_ms: {address: 0, min: 0, max: 9999}
       eject_duration_ms: {address: 1, min: 10, max: 5000}
-      eject_enable: {address: 2, min: 0, max: 1}
-      cip_on_ms: {address: 10, min: 100, max: 60000}
-      cip_off_ms: {address: 11, min: 100, max: 60000}
-      cip_enable: {address: 12, min: 0, max: 1}
-      ppr_blade: {address: 20, min: 1, max: 999}
-      ppr_wheel1: {address: 21, min: 1, max: 999}
-      ppr_wheel2: {address: 22, min: 1, max: 999}
-    coils: {}
+      cip_on_ms: {address: 2, min: 100, max: 60000}
+      cip_off_ms: {address: 3, min: 100, max: 60000}
+      ppr_blade: {address: 4, min: 1, max: 999}
+      ppr_wheel1: {address: 5, min: 1, max: 999}
+      ppr_wheel2: {address: 6, min: 1, max: 999}
+      blade_rpm_min: {address: 7, min: 0, max: 9999}
+      debounce_ms: {address: 8, min: 0, max: 100}
+    coils:
+      eject_enable: {address: 0}
+      cip_enable: {address: 1}
+      alarm_ack: {address: 2}
 
   vision_left:
     enabled: true

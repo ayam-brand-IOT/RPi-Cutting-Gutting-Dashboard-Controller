@@ -67,7 +67,7 @@ def main():
     # les fonctions Waveshare dans le firmware, mais on les force à OFF au boot.
     if cfg.get("gpio", {}).get("disable_waveshare_cip_on_start", True):
         for name, device in cfg["devices"].items():
-            if "cip_enable" in device.get("holding_registers", {}):
+            if "cip_enable" in device.get("coils", {}):
                 modbus.enqueue_write({"device": name, "parameter": "cip_enable", "value": 0})
     if gpio:
         gpio.start()
