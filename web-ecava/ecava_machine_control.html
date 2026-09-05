@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Cutting / Gutting Control</title>
-  <!-- API JavaScript Ecava IntegraXor : fournit getTag() et setTag(). -->
+  <!-- Ecava IntegraXor JavaScript API: provides getTag() and setTag(). -->
   <script type="text/javascript" src="./system/scripts/igrX.js"></script>
   <style>
     :root{--bg:#07101d;--panel:#101d30;--panel2:#0b1727;--line:#263850;--text:#edf4fb;--muted:#8fa3ba;--green:#2ed091;--red:#f25f6b;--blue:#4b9fff;--amber:#ffb44a;--shadow:0 14px 34px rgba(0,0,0,.28)}
@@ -30,92 +30,89 @@
   </style>
 </head>
 <body>
-<header><h1>Cutting / Gutting Machine</h1><div class="connection"><span id="apiDot" class="dot"></span><span id="apiStatus">Connexion IGX…</span><span>•</span><span id="clock">--:--:--</span></div></header>
+<header><h1>Cutting / Gutting Machine</h1><div class="connection"><span id="apiDot" class="dot"></span><span id="apiStatus">Connecting to IGX…</span><span>•</span><span id="clock">--:--:--</span></div></header>
 <main>
-  <div class="section-title"><h2>Planning de production</h2><span>Configuration persistante sur la Raspberry Pi</span></div>
+  <div class="section-title"><h2>Production schedule</h2><span>Settings saved on the Raspberry Pi</span></div>
   <section class="grid">
     <article class="card wide">
-      <div class="card-head"><h3>Heures de pause</h3><span class="badge">4 PAUSES</span></div>
+      <div class="card-head"><h3>Break times</h3><span class="badge">4 BREAKS</span></div>
       <div class="break-grid">
-        <label>Pause 1<input id="break1" type="time"></label>
-        <label>Pause 2<input id="break2" type="time"></label>
-        <label>Pause 3<input id="break3" type="time"></label>
-        <label>Pause 4<input id="break4" type="time"></label>
+        <label>Break 1<input id="break1" type="time"></label>
+        <label>Break 2<input id="break2" type="time"></label>
+        <label>Break 3<input id="break3" type="time"></label>
+        <label>Break 4<input id="break4" type="time"></label>
       </div>
-      <button class="action" type="button" onclick="saveBreaks()">Enregistrer les pauses</button>
+      <button class="action" type="button" onclick="saveBreaks()">Save break times</button>
     </article>
     <article class="card wide">
-      <div class="card-head"><h3>Compteurs de production</h3><span class="badge fault">ZONE SENSIBLE</span></div>
-      <p style="color:var(--muted);line-height:1.5">Remet à zéro Total, Good, Bad, Belly et les historiques de productivité. Les paramètres Modbus et CIP ne sont pas modifiés.</p>
-      <button class="action danger" type="button" onclick="resetProductionData()">Remettre les compteurs à zéro</button>
+      <div class="card-head"><h3>Production counters</h3><span class="badge fault">CAUTION</span></div>
+      <p style="color:var(--muted);line-height:1.5">Resets Total, Good, Bad, Belly and productivity history. Modbus and CIP settings remain unchanged.</p>
+      <button class="action danger" type="button" onclick="resetProductionData()">Reset counters</button>
     </article>
   </section>
 
-  <div class="section-title"><h2>État des machines</h2><span>Actualisation toutes les secondes</span></div>
+  <div class="section-title"><h2>Machine status</h2><span>Updated every second</span></div>
   <section class="grid">
     <article class="card wide" id="machine-left">
-      <div class="card-head"><h3>Gutting gauche</h3><span class="badge" data-online="gutting_left_connected">HORS LIGNE</span></div>
-      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_left_rpm_blade">--</b><span>Lame RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel1">--</b><span>Roue 1 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel2">--</b><span>Roue 2 RPM</span></div></div>
-      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_left_motors_on"></i>Moteurs</div><div class="led"><i class="lamp alarm" data-led="gutting_left_motors_trip"></i>Trip moteur</div><div class="led"><i class="lamp" data-led="gutting_left_belt_on"></i>Convoyeur</div><div class="led"><i class="lamp" data-led="gutting_left_belly_on"></i>Belly sensor</div></div>
+      <div class="card-head"><h3>Left gutting</h3><span class="badge" data-online="gutting_left_connected">OFFLINE</span></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_left_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div></div>
+      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_left_motors_on"></i>Motors</div><div class="led"><i class="lamp alarm" data-led="gutting_left_motors_trip"></i>Motor trip</div><div class="led"><i class="lamp" data-led="gutting_left_belt_on"></i>Conveyor</div><div class="led"><i class="lamp" data-led="gutting_left_belly_on"></i>Belly sensor</div></div>
     </article>
     <article class="card wide" id="machine-right">
-      <div class="card-head"><h3>Gutting droite</h3><span class="badge" data-online="gutting_right_connected">HORS LIGNE</span></div>
-      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_right_rpm_blade">--</b><span>Lame RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel1">--</b><span>Roue 1 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel2">--</b><span>Roue 2 RPM</span></div></div>
-      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_right_motors_on"></i>Moteurs</div><div class="led"><i class="lamp alarm" data-led="gutting_right_motors_trip"></i>Trip moteur</div><div class="led"><i class="lamp" data-led="gutting_right_belt_on"></i>Convoyeur</div><div class="led"><i class="lamp" data-led="gutting_right_belly_on"></i>Belly sensor</div></div>
+      <div class="card-head"><h3>Right gutting</h3><span class="badge" data-online="gutting_right_connected">OFFLINE</span></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_right_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div></div>
+      <div class="leds"><div class="led"><i class="lamp" data-led="gutting_right_motors_on"></i>Motors</div><div class="led"><i class="lamp alarm" data-led="gutting_right_motors_trip"></i>Motor trip</div><div class="led"><i class="lamp" data-led="gutting_right_belt_on"></i>Conveyor</div><div class="led"><i class="lamp" data-led="gutting_right_belly_on"></i>Belly sensor</div></div>
     </article>
   </section>
 
-  <div class="section-title"><h2>Utilities</h2><span>Consommation secondaire — Modbus → MQTT</span></div>
+  <div class="section-title"><h2>Utilities</h2><span>Utility consumption — Modbus → MQTT</span></div>
   <section class="grid">
     <article class="card wide">
-      <div class="card-head"><h3>Électricité</h3><span class="badge" data-online="electricity_meter_connected">HORS LIGNE</span></div>
-      <div class="value-row"><span>Consommation du jour</span><b><span data-value="electricity_meter_energy_today_kwh">--</span> kWh</b></div>
-      <div class="value-row"><span>Consommation du mois</span><b><span data-value="electricity_meter_energy_month_kwh">--</span> kWh</b></div>
-      <div class="value-row"><span>Puissance actuelle</span><b><span data-value="electricity_meter_power_kw">--</span> kW</b></div>
+      <div class="card-head"><h3>Electricity</h3><span class="badge" data-online="electricity_meter_connected">OFFLINE</span></div>
+      <div class="value-row"><span>Daily consumption</span><b><span data-value="electricity_meter_energy_today_kwh">--</span> kWh</b></div>
+      <div class="value-row"><span>Monthly consumption</span><b><span data-value="electricity_meter_energy_month_kwh">--</span> kWh</b></div>
+      <div class="value-row"><span>Current power</span><b><span data-value="electricity_meter_power_kw">--</span> kW</b></div>
     </article>
     <article class="card wide">
-      <div class="card-head"><h3>Eau</h3><span class="badge" data-online="water_meter_connected">HORS LIGNE</span></div>
-      <div class="value-row"><span>Consommation du jour</span><b><span data-value="water_meter_water_today_m3">--</span> m³</b></div>
-      <div class="value-row"><span>Consommation du mois</span><b><span data-value="water_meter_water_month_m3">--</span> m³</b></div>
-      <div class="value-row"><span>Débit actuel</span><b><span data-value="water_meter_flow_l_min">--</span> L/min</b></div>
+      <div class="card-head"><h3>Water</h3><span class="badge" data-online="water_meter_connected">OFFLINE</span></div>
+      <div class="value-row"><span>Daily consumption</span><b><span data-value="water_meter_water_today_m3">--</span> m³</b></div>
+      <div class="value-row"><span>Monthly consumption</span><b><span data-value="water_meter_water_month_m3">--</span> m³</b></div>
+      <div class="value-row"><span>Current flow</span><b><span data-value="water_meter_flow_l_min">--</span> L/min</b></div>
     </article>
   </section>
 
-  <div class="section-title"><h2>CIP — CP-IO22</h2><span>Valeur actuelle + commande opérateur</span></div>
+  <div class="section-title"><h2>CIP — CP-IO22</h2><span>Current value + operator command</span></div>
   <section class="grid" id="cipCards"></section>
 
-  <div class="section-title"><h2>Paramètres Gutting</h2><span>Écriture individuelle sécurisée</span></div>
+  <div class="section-title"><h2>Gutting settings</h2><span>Validated individual writes</span></div>
   <section class="grid">
-    <article class="card wide"><div class="card-head"><h3>Gutting gauche</h3><span class="badge">SLAVE 3</span></div><div id="paramsLeft"></div></article>
-    <article class="card wide"><div class="card-head"><h3>Gutting droite</h3><span class="badge">SLAVE 6</span></div><div id="paramsRight"></div></article>
+    <article class="card wide"><div class="card-head"><h3>Left gutting</h3><span class="badge">SLAVE 3</span></div><div id="paramsLeft"></div></article>
+    <article class="card wide"><div class="card-head"><h3>Right gutting</h3><span class="badge">SLAVE 6</span></div><div id="paramsRight"></div></article>
   </section>
 
-  <div class="section-title"><h2>Vision / Jetson</h2><span>Paramètres et compteurs</span></div>
+  <div class="section-title"><h2>Vision / Jetson</h2><span>Settings and counters</span></div>
   <section class="grid" id="visionCards"></section>
 </main>
 <div id="toast"></div>
 
 <script>
-/* ========================================================================
-   ADAPTATION ECAVA
-   Seulement deux tags IGX sont utilisés : un état JSON et une commande
-   encodée en base64(JSON), car cette version d'IGX refuse le JSON brut dans
-   setTag(). La RPi décode automatiquement la commande reçue par MQTT.
-   Les clés *_actual et *_cmd plus bas sont seulement des identifiants internes
-   de l'interface; elles ne doivent pas être créées comme tags Ecava.
-   ======================================================================== */
-/* Seulement ces deux tags Ecava sont nécessaires. */
+/* ECAVA INTEGRATION
+   Only two IGX tags are used: a JSON state and a base64(JSON) command.
+   This IGX version rejects raw JSON in setTag(); the RPi decodes MQTT commands.
+   The *_actual and *_cmd keys below are internal UI identifiers, not Ecava tags.
+*/
+/* Only these two Ecava tags are required. */
 var STATE_TAG = 'machine_state_json';
 var COMMAND_TAG = 'machine_command_json';
 
 var CIP = [
-  {id:'left',name:'Gutting gauche',enableA:'cip_left_enable_actual',onA:'cip_left_on_actual',offA:'cip_left_off_actual',output:'cip_left_output',enableC:'cip_left_enable_cmd',onC:'cip_left_on_cmd',offC:'cip_left_off_cmd'},
+  {id:'left',name:'Left gutting',enableA:'cip_left_enable_actual',onA:'cip_left_on_actual',offA:'cip_left_off_actual',output:'cip_left_output',enableC:'cip_left_enable_cmd',onC:'cip_left_on_cmd',offC:'cip_left_off_cmd'},
   {id:'cutting',name:'Cutting machine',enableA:'cip_cutting_enable_actual',onA:'cip_cutting_on_actual',offA:'cip_cutting_off_actual',output:'cip_cutting_output',enableC:'cip_cutting_enable_cmd',onC:'cip_cutting_on_cmd',offC:'cip_cutting_off_cmd'},
-  {id:'right',name:'Gutting droite',enableA:'cip_right_enable_actual',onA:'cip_right_on_actual',offA:'cip_right_off_actual',output:'cip_right_output',enableC:'cip_right_enable_cmd',onC:'cip_right_on_cmd',offC:'cip_right_off_cmd'}
+  {id:'right',name:'Right gutting',enableA:'cip_right_enable_actual',onA:'cip_right_on_actual',offA:'cip_right_off_actual',output:'cip_right_output',enableC:'cip_right_enable_cmd',onC:'cip_right_on_cmd',offC:'cip_right_off_cmd'}
 ];
 var PARAMS = [
-  {key:'eject_delay',label:'Délai éjection',unit:'ms',min:0,max:9999}, {key:'eject_duration',label:'Durée éjection',unit:'ms',min:10,max:5000}, {key:'eject_enable',label:'Éjecteur activé',bool:true},
-  {key:'ppr_blade',label:'PPR lame',unit:'',min:1,max:999}, {key:'ppr_wheel1',label:'PPR roue 1',unit:'',min:1,max:999}, {key:'ppr_wheel2',label:'PPR roue 2',unit:'',min:1,max:999}
+  {key:'eject_delay',label:'Ejection delay',unit:'ms',min:0,max:9999}, {key:'eject_duration',label:'Ejection duration',unit:'ms',min:10,max:5000}, {key:'eject_enable',label:'Ejector enabled',bool:true},
+  {key:'ppr_blade',label:'Blade PPR',unit:'',min:1,max:999}, {key:'ppr_wheel1',label:'Wheel 1 PPR',unit:'',min:1,max:999}, {key:'ppr_wheel2',label:'Wheel 2 PPR',unit:'',min:1,max:999}
 ];
 var latest = {}, apiReady = false;
 
@@ -125,7 +122,7 @@ function toast(text,bad){var e=document.getElementById('toast');e.textContent=te
 
 function consumeState(state){
   var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
-  if(!state||typeof state!=='object')throw new Error('État JSON invalide');
+  if(!state||typeof state!=='object')throw new Error('Invalid JSON state');
   offsets=state.rpi&&state.rpi.counter_offsets?state.rpi.counter_offsets:{};
   for(i=0;i<deviceNames.length;i++){
     name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;
@@ -165,13 +162,13 @@ function consumeState(state){
 
 function readAllTags(){
   var result,text,state;
-  if(typeof getTag!=='function'){setApi(false,'getTag() indisponible');return}
+  if(typeof getTag!=='function'){setApi(false,'getTag() unavailable');return}
   try{
     result=getTag(STATE_TAG);
     if(result&&result.value!==undefined)result=result.value;
-    if(typeof result==='string'){text=result.trim();if(!text)throw new Error('Tag JSON vide');state=JSON.parse(text)}else state=result;
-    consumeState(state);apiReady=true;setApi(true,'IGX connecté');render();
-  }catch(error){setApi(false,'JSON état invalide')}
+    if(typeof result==='string'){text=result.trim();if(!text)throw new Error('Empty JSON tag');state=JSON.parse(text)}else state=result;
+    consumeState(state);apiReady=true;setApi(true,'IGX connected');render();
+  }catch(error){setApi(false,'Invalid state JSON')}
 }
 
 function commandFromKey(key,value){
@@ -180,7 +177,7 @@ function commandFromKey(key,value){
   if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
   match=/^(gutting_left|gutting_right|vision_left|vision_right)_(.+)_cmd$/.exec(key);
   if(match){device=match[1];parameter=match[2];if(parameter==='eject_delay')parameter='eject_delay_ms';if(parameter==='eject_duration')parameter='eject_duration_ms';return {target:'modbus',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
-  throw new Error('Commande inconnue : '+key);
+  throw new Error('Unknown command: '+key);
 }
 
 function jsonToBase64(data){
@@ -189,11 +186,11 @@ function jsonToBase64(data){
 }
 
 function sendSystemCommand(parameters,successText){
-  if(typeof setTag!=='function')throw new Error('setTag() indisponible');
+  if(typeof setTag!=='function')throw new Error('setTag() unavailable');
   var command={target:'system',device:'rpi',parameters:parameters,timestamp:Date.now()};
   var payload=jsonToBase64(command);
   setTag(COMMAND_TAG,payload);
-  console.log('Commande système JSON :',JSON.stringify(command));
+  console.log('System command JSON:',JSON.stringify(command));
   toast(successText,false);
 }
 
@@ -202,36 +199,36 @@ function saveBreaks(){
   try{
     for(i=1;i<=4;i++){
       input=document.getElementById('break'+i);
-      if(!input.value)throw new Error('Les 4 heures de pause sont obligatoires');
+      if(!input.value)throw new Error('All four break times are required');
       values.push(input.value);
     }
     values.sort();
-    sendSystemCommand({breaks:values},'Heures de pause envoyées');
+    sendSystemCommand({breaks:values},'Break times sent');
     for(i=1;i<=4;i++)document.getElementById('break'+i).removeAttribute('data-touched');
   }catch(error){toast(error.message,true)}
 }
 
 function resetProductionData(){
-  if(!window.confirm('Remettre à zéro tous les compteurs de production ?'))return;
-  try{sendSystemCommand({reset_data:true},'Commande de remise à zéro envoyée')}
+  if(!window.confirm('Reset all production counters?'))return;
+  try{sendSystemCommand({reset_data:true},'Counter reset command sent')}
   catch(error){toast(error.message,true)}
 }
 
 function writeCommand(key,value,min,max){
   var command,payload;
-  if(typeof setTag!=='function'){toast('API IGX absente : vérifier igrX.js et ouvrir cette page depuis le serveur Ecava',true);return}
-  if(typeof value==='number' && (isNaN(value)||value<min||value>max)){toast('Valeur autorisée : '+min+' à '+max,true);return}
+  if(typeof setTag!=='function'){toast('IGX API unavailable: check igrX.js and open this page from the Ecava server',true);return}
+  if(typeof value==='number' && (isNaN(value)||value<min||value>max)){toast('Allowed range: '+min+' to '+max,true);return}
   try{
     command=commandFromKey(key,value);
     command.timestamp=Date.now();
     payload=jsonToBase64(command);
-    console.log('Commande JSON :',JSON.stringify(command));
-    console.log('Commande Base64 :',payload);
+    console.log('JSON command:',JSON.stringify(command));
+    console.log('Base64 command:',payload);
     setTag(COMMAND_TAG,payload);
-    toast('Commande envoyée : '+value,false);
+    toast('Command sent: '+value,false);
   }catch(error){
-    console.error('Erreur writeCommand :',error);
-    toast('Échec commande : '+error.message,true);
+    console.error('writeCommand error:',error);
+    toast('Command failed: '+error.message,true);
   }
 }
 function setApi(ok,text){document.getElementById('apiDot').className=ok?'dot ok':'dot';document.getElementById('apiStatus').textContent=text}
@@ -243,22 +240,22 @@ function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
 }
 function build(){
   var cip=document.getElementById('cipCards'),html='',i,c,p;
-  for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DÉSACTIVÉ</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Sortie électrovanne</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('Temps ON',c.onA,c.onC,100,60000,'ms',false)+settingHtml('Temps OFF',c.offA,c.offC,100,60000,'ms',false)+'</article>'}
+  for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DISABLED</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Solenoid valve output</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('ON time',c.onA,c.onC,100,60000,'ms',false)+settingHtml('OFF time',c.offA,c.offC,100,60000,'ms',false)+'</article>'}
   cip.innerHTML=html;
   ['Left','Right'].forEach(function(side){var prefix='gutting_'+side.toLowerCase()+'_',target=document.getElementById('params'+side),out='';for(i=0;i<PARAMS.length;i++){p=PARAMS[i];out+=settingHtml(p.label,prefix+p.key+'_actual',prefix+p.key+'_cmd',p.min,p.max,p.unit,p.bool)}target.innerHTML=out});
-  var visions=[{id:'left',name:'Vision gauche',slave:5},{id:'right',name:'Vision droite',slave:7}];html='';for(i=0;i<visions.length;i++){c=visions[i];html+='<article class="card wide"><div class="card-head"><h3>'+c.name+'</h3><span class="badge" data-online="vision_'+c.id+'_connected">HORS LIGNE</span></div><div class="value-row"><span>Poissons détectés</span><b data-value="vision_'+c.id+'_fish_counter">--</b></div><div class="value-row"><span>Poissons éjectés</span><b data-value="vision_'+c.id+'_ejected_fish">--</b></div>'+settingHtml('Modèle ML','vision_'+c.id+'_ml_model_actual','vision_'+c.id+'_ml_model_cmd',0,20,'',false)+settingHtml('Éjection activée','vision_'+c.id+'_eject_enable_actual','vision_'+c.id+'_eject_enable_cmd',0,1,'',true)+'</article>'}document.getElementById('visionCards').innerHTML=html;
+  var visions=[{id:'left',name:'Left vision',slave:5},{id:'right',name:'Right vision',slave:7}];html='';for(i=0;i<visions.length;i++){c=visions[i];html+='<article class="card wide"><div class="card-head"><h3>'+c.name+'</h3><span class="badge" data-online="vision_'+c.id+'_connected">OFFLINE</span></div><div class="value-row"><span>Fish detected</span><b data-value="vision_'+c.id+'_fish_counter">--</b></div><div class="value-row"><span>Fish ejected</span><b data-value="vision_'+c.id+'_ejected_fish">--</b></div>'+settingHtml('ML model','vision_'+c.id+'_ml_model_actual','vision_'+c.id+'_ml_model_cmd',0,20,'',false)+settingHtml('Ejection enabled','vision_'+c.id+'_eject_enable_actual','vision_'+c.id+'_eject_enable_cmd',0,1,'',true)+'</article>'}document.getElementById('visionCards').innerHTML=html;
   document.addEventListener('click',function(event){var button=event.target.closest('[data-apply]');if(!button)return;var key=button.getAttribute('data-apply'),input=document.querySelector('[data-command="'+key+'"]'),value=input.type==='checkbox'?(input.checked?1:0):Number(input.value),min=Number(button.getAttribute('data-min')),max=Number(button.getAttribute('data-max'));writeCommand(key,value,min,max)});
 }
 function render(){
   var nodes=document.querySelectorAll('[data-value]'),i,key,v,input,badge;
   for(i=0;i<nodes.length;i++){key=nodes[i].getAttribute('data-value');v=safeValue(latest[key]);if(nodes[i].querySelector('small'))nodes[i].childNodes[0].nodeValue=v+' ';else nodes[i].textContent=v}
   nodes=document.querySelectorAll('[data-led]');for(i=0;i<nodes.length;i++){nodes[i].classList.toggle('on',isOn(latest[nodes[i].getAttribute('data-led')]))}
-  nodes=document.querySelectorAll('[data-online]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-online')]);nodes[i].textContent=v?'EN LIGNE':'HORS LIGNE';nodes[i].classList.toggle('online',v)}
-  nodes=document.querySelectorAll('[data-enabled]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-enabled')]);nodes[i].textContent=v?'ACTIVÉ':'DÉSACTIVÉ';nodes[i].classList.toggle('active',v)}
+  nodes=document.querySelectorAll('[data-online]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-online')]);nodes[i].textContent=v?'ONLINE':'OFFLINE';nodes[i].classList.toggle('online',v)}
+  nodes=document.querySelectorAll('[data-enabled]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-enabled')]);nodes[i].textContent=v?'ENABLED':'DISABLED';nodes[i].classList.toggle('active',v)}
   nodes=document.querySelectorAll('[data-command]');for(i=0;i<nodes.length;i++){input=nodes[i];if(document.activeElement===input||input.getAttribute('data-touched')==='1')continue;key=input.getAttribute('data-command').replace(/_cmd$/,'_actual');if(latest[key]!==undefined){if(input.type==='checkbox')input.checked=isOn(latest[key]);else input.value=latest[key]}}
 }
 document.addEventListener('input',function(e){if(e.target.hasAttribute('data-command')||e.target.type==='time')e.target.setAttribute('data-touched','1')});
-build();readAllTags();window.setInterval(readAllTags,1000);window.setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-FR')},1000);
+build();readAllTags();window.setInterval(readAllTags,1000);window.setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
 </script>
 </body>
 </html>

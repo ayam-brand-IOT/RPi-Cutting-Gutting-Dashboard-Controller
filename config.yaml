@@ -12,7 +12,7 @@ machine:
 
 mqtt:
   enabled: true
-  host: 192.168.100.69
+  host: 192.168.100.51
   port: 1883
   username: "cfpp"
   password: "Cfpp2021"
@@ -32,6 +32,7 @@ dashboard:
   fullscreen: true
   fps: 3
   productivity_window_s: 60
+  screenshot_dir: screenshots
   # Dès que le registre est ajouté au device, le dashboard l'affiche ici.
   # Exemple : ajouter people_count: <adresse> dans input_registers du device.
   people_device: vision_left
@@ -68,7 +69,7 @@ gpio:
 devices:
   gutting_left:
     enabled: true
-    label: Gutting gauche
+    label: Left gutting
     slave: 3
     type: gutting
     input_blocks:
@@ -110,7 +111,7 @@ devices:
 
   vision_left:
     enabled: true
-    label: Vision gauche
+    label: Left vision
     slave: 5
     type: vision
     input_blocks:
@@ -126,13 +127,13 @@ devices:
 
   gutting_right:
     inherit: gutting_left
-    label: Gutting droite
+    label: Right gutting
     slave: 6
     enabled: true
 
   vision_right:
     inherit: vision_left
-    label: Vision droite
+    label: Right vision
     slave: 7
     enabled: true
 

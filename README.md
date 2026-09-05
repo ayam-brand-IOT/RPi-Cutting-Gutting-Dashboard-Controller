@@ -1,54 +1,38 @@
-# Dashboard Cutting / Gutting — Raspberry Pi Zero 2W
+# Cutting / Gutting Dashboard — Raspberry Pi Zero 2W
 
-## 0. Présentation générale
+## 0. Overview
 
-Ce projet fait tourner une **passerelle industrielle** sur une Raspberry Pi
-Zero 2W pour la ligne Cutting/Gutting :
+This project runs an **industrial gateway** on a Raspberry Pi Zero 2W for the Cutting/Gutting line:
 
-- **Modbus RTU** (RS485) vers les devices physiques (gutting, capteurs, etc.)
-- **GPIO CP-IO22** pour la logique CIP (nettoyage en place)
-- **MQTT** comme bus central : la RPi publie l'état complet en JSON et reçoit
-  les commandes
-- **Ecava IntegraXor (IGX)**, hébergé sur le serveur SCADA, qui ne connaît que
-  **deux tags** (`machine_state_json` en lecture, `machine_command_json` en
-  écriture) — tout le détail des machines passe dans le JSON, pas dans des
-  tags Ecava individuels
-- Un **dashboard opérateur Pygame** (`main.py` / `dashboard.py`), affiché en
-  plein écran sans environnement de bureau (mode kiosque), qui montre les KPI
-  de production (poissons/minute, Good/Bad/Belly, RPM, trips moteur, CIP,
-  eau/électricité, météo, pauses)
+- **Modbus RTU** (RS485) communicates with physical devices (gutting machines, sensors, etc.).
+- **CP-IO22 GPIO** handles CIP (cleaning in place).
+- **MQTT** is the central message bus: the RPi publishes the full state as JSON and receives commands.
+- **Ecava IntegraXor (IGX)**, hosted on the SCADA server, uses only **two tags**: `machine_state_json` for reading and `machine_command_json` for writing. All machine details travel in the JSON payload rather than individual Ecava tags.
+- A **Pygame operator dashboard** (`main.py` / `dashboard.py`) runs fullscreen without a desktop environment (kiosk mode). It displays production KPIs: fish/minute, Good/Bad/Belly, RPM, motor trips, CIP, water/electricity, weather and breaks.
 
-Ce document couvre l'installation complète sur une RPi Zero 2W **vierge**
-(OS fraîchement installé), puis l'utilisation du système une fois en place.
+This guide covers a complete installation on a **fresh Raspberry Pi Zero 2W**, followed by day-to-day operation.
 
-**Ordre du guide :**
-1. Installation des paquets, environnement virtuel, test de `main.py`
-2. Mode kiosque (démarrage automatique sans bureau)
-3. Activation du port série pour le HAT RS485
-4. Outils de développement / test
-5. Utilisation et référence (SCADA, dashboard, dépannage)
+**Guide order:**
+
+1. Packages, virtual environment and manual `main.py` check
+2. Kiosk mode (automatic startup without a desktop)
+3. Serial port setup for the RS485 HAT
+4. Development and testing tools
+5. Operation and reference (SCADA, dashboard and troubleshooting)
 
 ---
 
-## 1. Installation de base
+## 1. Basic installation
 
-Cible : Raspberry Pi Zero 2W, Raspberry Pi OS (Debian Bookworm), utilisateur
-`lastra`, projet dans `~/dashboard-Cutting-Gutting`, venv `~/fish-venv`.
+Target: Raspberry Pi Zero 2W, Raspberry Pi OS (Debian Bookworm), user `lastra`, project at `~/dashboard-Cutting-Gutting`, virtual environment at `~/fish-venv`.
 
-### 1.1 Pourquoi cette approche
+### 1.1 Why this approach
 
-Certaines libs (`pygame`, `gpiozero`) doivent être liées aux bibliothèques
-natives du système (SDL2 avec support KMSDRM, GPIO avec `lgpio`) pour
-fonctionner en mode kiosque. Un `pip install` classique dans un venv isolé
-installe des wheels génériques **sans** ce support. À l'inverse, tout
-installer au niveau système casse la reproductibilité et les contraintes de
-version fines (ex. `pymodbus>=3.6,<4`).
+Some libraries (`pygame`, `gpiozero`) need the native system libraries (SDL2 with KMSDRM support, GPIO with `lgpio`) to work in kiosk mode. A regular `pip install` in an isolated virtual environment installs generic wheels **without** that support. Installing everything system-wide makes reproducibility and specific version constraints, such as `pymodbus>=3.6,<4`, harder to manage.
 
-**Solution retenue** : installer les libs à bindings natifs via `apt`, créer
-le venv avec `--system-site-packages` pour qu'il les voie, et n'utiliser
-`pip` que pour les libs pures Python où la version précise compte.
+**Chosen approach:** install libraries with native bindings through `apt`, create the virtual environment with `--system-site-packages` so it can access them, and use `pip` for pure Python libraries that require a specific version.
 
-### 1.2 Mise à jour du système et paquets apt
+### 1.2 System update and apt packages
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
@@ -63,53 +47,48 @@ sudo apt install -y \
   python3-lgpio
 ```
 
-`python3-lgpio` est le pin factory recommandé par `gpiozero` sur Bookworm —
-il évite le repli sur `NativeFactory` (expérimental) observé quand aucun pin
-factory correct n'est disponible.
+`python3-lgpio` is the recommended `gpiozero` pin factory on Bookworm. It avoids falling back to the experimental `NativeFactory` when no suitable pin factory is available.
 
-### 1.3 Récupération du projet
+### 1.3 Get the project
 
 ```bash
 cd ~
-git clone <url-du-repo> dashboard-Cutting-Gutting
+git clone <repo-url> dashboard-Cutting-Gutting
 cd ~/dashboard-Cutting-Gutting
 ```
 
-(remplacer par la méthode réellement utilisée — clone git, `scp`, clé USB…)
+Use the appropriate transfer method for your setup: Git clone, `scp`, USB drive, etc.
 
-### 1.4 Création du venv avec accès aux paquets système
+### 1.4 Create a virtual environment with access to system packages
 
 ```bash
 python3 -m venv ~/fish-venv --system-site-packages
 source ~/fish-venv/bin/activate
 ```
 
-### 1.5 Libs restantes via pip (contrainte de version précise)
+### 1.5 Install the remaining libraries with pip
 
 ```bash
 pip install --upgrade pip
 pip install "pymodbus>=3.6,<4"
 ```
 
-`pygame`, `PyYAML`, `pyserial`, `paho-mqtt`, `gpiozero` ne sont **pas**
-réinstallés via pip : le venv les voit déjà depuis le système grâce à
-`--system-site-packages`.
+Do **not** reinstall `pygame`, `PyYAML`, `pyserial`, `paho-mqtt` or `gpiozero` through pip: the virtual environment already sees the system packages through `--system-site-packages`.
 
-### 1.6 Accès GPIO / série / vidéo pour l'utilisateur
+### 1.6 Grant GPIO, serial and video access
 
 ```bash
 sudo usermod -aG dialout,video,render,gpio lastra
 ```
 
-Se déconnecter/reconnecter (ou redémarrer) pour que les groupes prennent
-effet :
+Log out and back in, or reboot, for the new group memberships to take effect:
 
 ```bash
 groups lastra
-# Doit inclure : dialout video render gpio
+# Must include: dialout video render gpio
 ```
 
-### 1.7 Vérification de l'installation
+### 1.7 Verify the installation
 
 ```bash
 python3 -c "import pygame; print('pygame SDL:', pygame.get_sdl_version())"
@@ -117,94 +96,87 @@ python3 -c "from gpiozero import Device; print('pin factory:', Device.pin_factor
 python3 -c "import pymodbus; print('pymodbus:', pymodbus.__version__)"
 ```
 
-Attendu :
-- SDL version alignée sur celle du système (pas une version isolée du venv)
-- `pin factory: LGPIOFactory` (pas `NativeFactory`)
-- `pymodbus` conforme à la contrainte `>=3.6,<4`
+Expected results:
 
-### 1.8 Test manuel de `main.py`
+- SDL matches the system version, rather than a separate version bundled in the virtual environment.
+- The pin factory is `LGPIOFactory`, rather than `NativeFactory`.
+- `pymodbus` satisfies `>=3.6,<4`.
 
-Avant de configurer le mode kiosque, vérifier que le programme démarre
-correctement en console normale (bureau ou SSH avec affichage local) :
+### 1.8 Run main.py manually
 
-1. Vérifier/adapter `config.yaml` (port Modbus, devices activés, section
-   `mqtt`, `weather`, `dashboard`…)
-2. Lancer :
+Before configuring kiosk mode, check that the program starts from a normal console (desktop session, or SSH with a local display):
+
+1. Review `config.yaml`: Modbus port, enabled devices, and the `mqtt`, `weather` and `dashboard` sections.
+2. Run:
    ```bash
    cd ~/dashboard-Cutting-Gutting
    source ~/fish-venv/bin/activate
    python3 main.py --config config.yaml
    ```
-3. Vérifier dans les logs : connexion Modbus, connexion MQTT, publication du
-   JSON sur `factory/cutting-gutting/scada/state`.
+3. Check the logs for Modbus and MQTT connections and JSON publication on `factory/cutting-gutting/scada/state`.
 
-Ce n'est qu'une fois ce test concluant qu'il faut passer au mode kiosque.
+Proceed to kiosk mode only after this check succeeds.
 
 ---
 
-## 2. Mode kiosque (démarrage automatique sans bureau)
+## 2. Kiosk mode (automatic startup without a desktop)
 
-### 2.1 Démarrage en mode console (sans bureau)
+### 2.1 Boot into the console
 
 ```bash
 sudo raspi-config
 ```
-→ `System Options` → `Boot / Auto Login` → **`Console Autologin`**
+
+Choose `System Options` → `Boot / Auto Login` → **Console Autologin**.
 
 ```bash
 sudo reboot
 ```
 
-Après redémarrage, vérifier qu'aucun processus de bureau ne tourne :
+After rebooting, check that no desktop processes are running:
 
 ```bash
 htop
-# Ne doivent PAS apparaître : Xwayland, labwc, wf-panel-pi, lxterminal
+# Must NOT appear: Xwayland, labwc, wf-panel-pi, lxterminal
 ```
 
-### 2.2 Accès aux périphériques graphiques
+### 2.2 Access to graphics devices
 
 ```bash
 sudo usermod -aG video,render,gpio,i2c,spi lastra
 ```
 
-(déjà fait en §1.6 pour `video`/`render`/`gpio` — cette commande ajoute en
-plus `i2c`/`spi` si nécessaire pour d'autres périphériques)
+Section 1.6 already adds `video`, `render` and `gpio`. This command also adds `i2c` and `spi` if other peripherals need them.
 
-Vérifier que les périphériques DRM existent :
+Check that DRM devices exist:
 
 ```bash
 ls -l /dev/dri
-# Doit lister : card0, renderD128
+# Must list: card0, renderD128
 ```
 
-### 2.3 Rendu KMSDRM
+### 2.3 KMSDRM rendering
 
-Déjà en place dans `dashboard.py` (haut du fichier, avant l'import de
-`pygame`) :
+For kiosk mode, SDL can be configured before importing `pygame`:
 
 ```python
 os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
 ```
 
-`setdefault` laisse la priorité à une variable d'environnement définie par le
-service systemd si besoin, sans devoir modifier le code. Un repli automatique
-vers `fbcon` est aussi prévu dans `run_dashboard()` si `kmsdrm` échoue à
-l'initialisation (message loggé dans ce cas).
+`setdefault` gives priority to an environment variable already supplied by systemd. The current `dashboard.py` uses the SDL driver selected by its environment; it does not explicitly set this default or implement an automatic `fbcon` fallback. Set `SDL_VIDEODRIVER=kmsdrm` in the service environment when required by your installation.
 
-### 2.4 (Optionnel) Désactiver le partage d'écran headless
+### 2.4 Optional: disable headless screen sharing
 
-Raspberry Pi OS Bookworm démarre par défaut un compositeur Wayland headless +
-VNC (`wayvnc`), même en mode console. À désactiver si aucun accès bureau à
-distance n'est nécessaire (libère de la RAM/CPU) :
+If your Raspberry Pi OS Bookworm installation starts a headless Wayland compositor and VNC (`wayvnc`) in console mode, disable it when remote desktop access is unnecessary to free RAM and CPU:
 
 ```bash
 systemctl list-units | grep -i vnc
 sudo systemctl disable --now wayvnc.service
 ```
-(ajuster le nom exact du service selon le résultat de la première commande)
 
-### 2.5 Service systemd
+Adjust the service name to match the first command's output.
+
+### 2.5 systemd service
 
 ```bash
 sudo nano /etc/systemd/system/dashboard.service
@@ -229,9 +201,7 @@ StandardError=journal
 WantedBy=multi-user.target
 ```
 
-Point important : `ExecStart` pointe vers l'interpréteur du venv
-(`~/fish-venv/bin/python3`), pas `/usr/bin/python3` — systemd n'a pas de
-notion de `source activate`, il faut lui donner le bon binaire directement.
+`ExecStart` must point to the virtual environment interpreter (`~/fish-venv/bin/python3`). systemd does not run `source activate`; supply the correct executable directly.
 
 ```bash
 sudo systemctl daemon-reload
@@ -239,27 +209,28 @@ sudo systemctl enable dashboard.service
 sudo systemctl start dashboard.service
 ```
 
-### 2.6 Vérification finale
+### 2.6 Final checks
 
 ```bash
 sudo systemctl status dashboard.service
 journalctl -u dashboard.service -f
 ```
 
-Logs attendus au démarrage :
+Example startup logs:
+
 ```
-[DISPLAY] pilote=KMSDRM résolution=1920x1080
+[DISPLAY] driver=KMSDRM resolution=1920x1080
 [GPIO] ... ONLINE via gpiozero ...
 ```
 
 ```bash
 htop
 ```
-- Aucun `Xwayland` / `labwc` / `lxterminal`
-- `python3 ... main.py` seul processus d'affichage significatif
 
-Pour un redémarrage complet du service après une modification du code ou de
-la config, sans reboot :
+- No `Xwayland`, `labwc` or `lxterminal` processes.
+- `python3 ... main.py` is the only significant display process.
+
+To restart the service after changing code or configuration, without rebooting:
 
 ```bash
 sudo systemctl restart dashboard.service
@@ -267,61 +238,57 @@ sudo systemctl restart dashboard.service
 
 ---
 
-## 3. Activation du port série pour le HAT RS485
+## 3. Enable the serial port for the RS485 HAT
 
-Le HAT RS485 utilise l'UART matériel de la RPi (broches GPIO14/TXD et
-GPIO15/RXD). Sur une RPi vierge, le port série n'est ni activé, ni disponible
-en UART complet (PL011) car il est par défaut assigné au Bluetooth.
+The RS485 HAT uses the RPi hardware UART on GPIO14/TXD and GPIO15/RXD. On a fresh installation, the serial interface needs to be enabled; the full PL011 UART may also be assigned to Bluetooth.
 
-### 3.1 Activer le matériel série via raspi-config
+### 3.1 Enable serial hardware using raspi-config
 
 ```bash
 sudo raspi-config
 ```
-→ `Interface Options` → `Serial Port`
-- *"Would you like a login shell to be accessible over serial?"* → **No**
-  (sinon un getty tourne sur le port et entre en conflit avec Modbus)
-- *"Would you like the serial port hardware to be enabled?"* → **Yes**
 
-Cela ajoute `enable_uart=1` dans `/boot/firmware/config.txt`.
+Choose `Interface Options` → `Serial Port`.
 
-### 3.2 Libérer l'UART complet (désactiver le Bluetooth)
+- “Would you like a login shell to be accessible over serial?” → **No**. Otherwise, a getty process competes with Modbus for the port.
+- “Would you like the serial port hardware to be enabled?” → **Yes**.
 
-Sur la RPi Zero 2W, l'UART matériel principal (PL011, `ttyAMA0`) est assigné
-au Bluetooth par défaut ; seul le mini-UART (`ttyS0`, moins fiable à haut
-débit) reste sur les broches GPIO. Pour avoir le PL011 complet sur les
-broches (recommandé pour Modbus RTU) :
+This adds `enable_uart=1` to `/boot/firmware/config.txt`.
+
+### 3.2 Free the full UART by disabling Bluetooth
+
+On the RPi Zero 2W, the main hardware UART (PL011, `ttyAMA0`) is assigned to Bluetooth by default. Only the mini-UART (`ttyS0`, less reliable at high baud rates) remains on the GPIO pins. To route the full PL011 UART to those pins for Modbus RTU:
 
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
 
-Ajouter à la fin :
+Append:
+
 ```ini
 dtoverlay=disable-bt
 ```
 
-Puis désactiver le service qui gère le Bluetooth sur l'UART :
+Then disable the service that manages Bluetooth over UART:
 
 ```bash
 sudo systemctl disable hciuart
 sudo reboot
 ```
 
-### 3.3 Vérification après redémarrage
+### 3.3 Check after rebooting
 
 ```bash
 ls -l /dev/serial0
-# Doit être un lien symbolique vers /dev/ttyAMA0
+# Must be a symbolic link to /dev/ttyAMA0
 
 raspi-gpio get 14,15
-# Doit montrer les GPIO 14/15 en fonction ALT0 (TXD0/RXD0)
+# Must show GPIO 14/15 in ALT0 mode (TXD0/RXD0)
 ```
 
-### 3.4 Test de la liaison série
+### 3.4 Test the serial link
 
-Sans device branché, test en boucle locale (jumper TX↔RX sur le connecteur,
-HAT débranché) :
+With no device connected, perform a local loopback test: disconnect the HAT and jumper TX to RX on the connector.
 
 ```bash
 python3 -c "
@@ -333,88 +300,74 @@ print(s.read(10))
 "
 ```
 
-Avec le HAT RS485 branché et un device sur le bus, utiliser directement
-`test_modbus_slave.py` (§4.2) pour valider la communication de bout en bout.
+With the RS485 HAT and a device connected to the bus, use `test_modbus_slave.py` (section 4.2) to verify communication end to end.
 
-### 3.5 Configuration du HAT et de `config.yaml`
+### 3.5 Configure the HAT and config.yaml
 
-- Vérifier le cavalier/DIP switch de **résistance de terminaison 120 Ω** sur
-  le HAT : à activer uniquement à l'extrémité physique du bus RS485.
-- Si le HAT gère le sens (DE/RE) automatiquement (détection de flux), aucune
-  broche GPIO supplémentaire n'est nécessaire. Si le sens est manuel, câbler
-  et configurer la broche DE/RE dédiée.
-- Dans `config.yaml`, pointer le port Modbus vers le port série activé :
+- Check the HAT's **120 Ω termination resistor** jumper or DIP switch. Enable termination only at a physical end of the RS485 bus.
+- If the HAT controls DE/RE direction automatically, no additional GPIO is needed. For manual direction control, wire and configure the dedicated DE/RE pin.
+- Set the enabled serial port in `config.yaml`:
   ```yaml
   modbus_port: /dev/serial0
   ```
-- Vérifier que l'utilisateur `lastra` est bien dans le groupe `dialout`
-  (fait en §1.6) pour avoir le droit d'ouvrir `/dev/serial0`.
+- Check that user `lastra` belongs to `dialout` (section 1.6) and can open `/dev/serial0`.
 
 ---
 
-## 4. Outils de développement / test
+## 4. Development and testing tools
 
-Ces scripts s'utilisent sur un **PC de développement** (pas sur la RPi), avec
-un adaptateur USB-RS485 branché sur le même bus que les devices.
+These scripts run on a **development PC**, with a USB-RS485 adapter connected to the same bus as the devices.
 
-### 4.1 `simulator` — Simulateur Modbus RTU
+### 4.1 simulator — Modbus RTU simulator
 
-### Sur Windows just ouvrir le .exe `simulator`
+On Windows, launch the `simulator` executable. Its configuration file is `config.yaml` in `/dist`.
 
-### le config.yaml dans `/dist` est le fichier de config ###
+The GUI simulates enabled devices in `config.yaml` that are not listed in `REAL_DEVICES`. This lets you test `main.py` without connecting every physical device.
 
-Simule en GUI tous les devices activés dans `config.yaml` qui ne sont pas dans
-`REAL_DEVICES`. Permet de tester `main.py` sans avoir tous les appareils
-physiques branchés.
-
-<!-- **Configuration du simulator.py (haut du fichier)** :
+<!-- **simulator.py configuration (top of the file):**
 
 ```python
-# Devices physiquement présents sur le bus — exclus du simulateur
+# Physical devices on the bus — excluded from the simulator
 REAL_DEVICES: set[str] = {"gutting_left"}
 ```
 
-**Démarrage avec port série virtuel** (pour tester en parallèle avec
-`main.py` sur la même machine, via `socat`) : -->
+**Start with a virtual serial pair** to test alongside main.py on the same machine using socat: -->
 
 ```bash
-# Linux/RPi seulement
+# Linux/RPi only
 sudo apt install socat
 socat -d -d pty,raw,echo=0 pty,raw,echo=0
-# Affiche ex : /dev/pts/3  et  /dev/pts/4
-# → simulateur sur /dev/pts/3, config.yaml modbus_port: /dev/pts/4
+# Example output: /dev/pts/3  and  /dev/pts/4
+# → simulator on /dev/pts/3, config.yaml modbus_port: /dev/pts/4
 ```
 
-Dans la GUI :
-- Champ **Port série** : adapter au port COM/tty de l'adaptateur USB-RS485
-- **Input Registers** : injectés par le simulateur → lus par le maître
-- **Holding Registers / Coils** : lecture seule, montrent ce que `main.py` a
-  écrit
-- Checkbox **Actif sur le bus** : décocher = le slave ne répond plus (simule
-  un appareil absent)
+In the GUI:
 
+- **Serial port**: select the USB-RS485 adapter's COM or tty port.
+- **Input Registers**: supplied by the simulator and read by the master.
+- **Holding Registers / Coils**: read-only fields showing what `main.py` has written.
+- **Active on bus** checkbox: uncheck it to stop the slave responding and simulate a missing device.
 
 > [!NOTE]
-> **Si un device est deja present sur le bus Modbus, il faut le desactiver dans l'app sinon risque de collisions et il apparaitra comme hors ligne dans le dashboard**
+> If a physical device is already present on the Modbus bus, disable its simulated counterpart in the application. Otherwise, address collisions may cause it to appear offline in the dashboard.
 
-### 4.2 `test_modbus_slave.py` — Lecture directe d'un device gutting
+### 4.2 test_modbus_slave.py — Read a gutting device directly
 
-Lit en boucle toutes les 1 s les registres du device gutting (slave 3 par
-défaut) et les affiche dans le terminal. Utile pour vérifier la communication
-RS485 sans lancer `main.py`.
+Reads the gutting device registers once per second (slave 3 by default) and prints them in the terminal. Use it to check RS485 communication without running `main.py`.
 
 ```bash
 python test_modbus_slave.py
 ```
 
-Adapter en tête de fichier si besoin :
+Adjust these values at the top of the file if necessary:
 
 ```python
-client = ModbusSerialClient(port="/dev/serial0", ...)  # ou "COM3" sur Windows
-DEVICE_ID = 3  # adresse slave du device à tester
+client = ModbusSerialClient(port="/dev/serial0", ...)  # or "COM3" on Windows
+DEVICE_ID = 3  # slave address of the device under test
 ```
 
-Sortie typique :
+Typical output:
+
 ```
 RPM blade/w1/w2 : 2450 / 1200 / 1180
 Motor trip/on   : 0 / 1
@@ -424,19 +377,20 @@ FW version      : 0x236
 
 ---
 
-## 5. Utilisation et référence
+## 5. Operation and reference
 
-### 5.1 Intégration Ecava — seulement deux tags JSON
+### 5.1 Ecava integration — only two JSON tags
 
-**Tag d'état** (RPi → Ecava) :
+**State tag** (RPi → Ecava):
+
 ```text
-Tag IGX : machine_state_json
+IGX tag : machine_state_json
 Topic   : factory/cutting-gutting/scada/state
-Sens    : MQTT Subscriber → tag IGX
+Direction: MQTT Subscriber → tag IGX
 Type    : string
 ```
 
-La RPi publie toutes les valeurs dans un seul JSON retained :
+The RPi publishes all values in one retained JSON message:
 
 ```json
 {
@@ -458,144 +412,112 @@ La RPi publie toutes les valeurs dans un seul JSON retained :
 }
 ```
 
-**Tag de commande** (Ecava → RPi) :
+**Command tag** (Ecava → RPi):
+
 ```text
-Tag IGX : machine_command_json
+IGX tag : machine_command_json
 Topic   : factory/cutting-gutting/scada/command
-Sens    : tag IGX → MQTT Publisher
+Direction: tag IGX → MQTT Publisher
 Type    : string
 Retain  : false
 QoS     : 1
 ```
 
-Commande CIP :
+CIP command:
+
 ```json
 {"target": "cip", "device": "gutting_left",
  "parameters": {"enable": 1, "on_ms": 500, "off_ms": 8000},
  "timestamp": 1784700000000}
 ```
 
-Commande Modbus :
+Modbus command:
+
 ```json
 {"target": "modbus", "device": "gutting_left",
  "parameters": {"eject_enable": 1, "eject_delay_ms": 200},
  "timestamp": 1784700000000}
 ```
 
-Confirmation RPi : `factory/cutting-gutting/scada/ack`
+RPi acknowledgement topic: `factory/cutting-gutting/scada/ack`.
 
-Le `timestamp` rend chaque valeur de commande différente, afin qu'Ecava
-publie bien deux commandes successives même si elles ont les mêmes
-paramètres.
+The `timestamp` makes each command value unique so Ecava publishes successive commands even when their parameters are identical.
 
-### 5.2 Interface HTML (`ecava_machine_control.html`)
+### 5.2 HTML interface (ecava_machine_control.html)
 
-La page lit l'état normalement. Pour les commandes, IntegraXor doit encoder
-le JSON en Base64 avant `setTag()` :
+The page reads the JSON state directly. Commands must be Base64-encoded before calling IntegraXor's `setTag()`:
 
 ```javascript
 getTag("machine_state_json")
 setTag("machine_command_json", btoa(JSON.stringify(command)))
 ```
 
-La RPi détecte et décode automatiquement `base64(JSON)`. Elle continue aussi
-à accepter du JSON brut envoyé depuis MQTT Explorer ou un autre client MQTT.
+The RPi automatically detects and decodes `base64(JSON)`. It also accepts raw JSON sent from MQTT Explorer or another MQTT client.
 
-Les clés visuelles `*_actual` et `*_cmd` présentes dans le JavaScript sont des
-identifiants internes — elles ne sont **pas** des tags à créer dans Ecava.
+The `*_actual` and `*_cmd` keys in JavaScript are internal UI identifiers. They are **not** additional tags to create in Ecava.
 
-### 5.3 Sécurité et Modbus
+The operator interface is in English, including connection status, validation messages, break settings and counter reset controls.
 
-- commandes MQTT non-retained
-- validation de chaque valeur avant écriture
-- relecture Modbus après écriture
-- un seul thread accède au RS485
-- CIP Waveshare verrouillés OFF
-- sorties CP-IO22 forcées OFF au démarrage et à l'arrêt
-- Input Registers lus chaque seconde
-- paramètres lus toutes les 10 secondes
+### 5.3 Safety and Modbus
 
-### 5.4 Dashboard Pygame — production
+- MQTT commands are non-retained.
+- Each value is validated before writing.
+- Modbus registers are read back after writing.
+- Only one thread accesses RS485.
+- Waveshare CIP outputs are locked OFF.
+- CP-IO22 outputs are forced OFF at startup and shutdown.
+- Input Registers are read every second.
+- Parameters are read every 10 seconds.
 
-L'écran privilégie les KPI opérateur : poissons/minute, personnes présentes,
-Good, Bad et éjections Belly. Chaque Gutting possède sa courbe de
-productivité glissante. Les trips moteur déclenchent un bandeau rouge et les
-RPM restent visibles dans les cartes machine secondaires. La zone CIP compacte
-ne montre que les trois sorties Raspberry Pi / CP-IO22. L'eau et
-l'électricité sont regroupées en bas avec leurs icônes et consommations
-jour/mois.
+### 5.4 Pygame production dashboard
 
-Le retour Cutting machine utilise provisoirement les entrées BCM20
-(`cutting_motors_on`) et BCM21 (`cutting_motors_trip`) du CP-IO22, actives
-HIGH. Le statut reste visible près des CIP et un Trip Cutting rejoint
-immédiatement le bandeau d'alarme rouge global. Adapter les pins et la
-polarité au câblage réel.
+The English dashboard emphasizes operator KPIs: fish/minute, people present, Good, Bad and Belly ejections. Each gutting machine has a rolling productivity graph. Motor trips trigger a red banner, while RPM remains visible in the machine cards. The compact CIP area shows only the three Raspberry Pi / CP-IO22 outputs. Water and electricity appear at the bottom with icons and daily/monthly consumption.
 
-Le débit est calculé sur la variation des compteurs `fish_counter` pendant la
-fenêtre `dashboard.productivity_window_s`. Pour afficher le personnel,
-ajouter le registre `people_count` au `input_registers` du device choisi puis
-renseigner `dashboard.people_device` et `dashboard.people_key`.
+Cutting machine feedback provisionally uses CP-IO22 inputs BCM20 (`cutting_motors_on`) and BCM21 (`cutting_motors_trip`), active HIGH. Its status appears near CIP, and a cutting motor trip immediately enters the global red alarm banner. Match the pins and polarity to the actual wiring.
 
-Les indicateurs Good, Bad et Belly sont affichés en pourcentage du nombre
-total de poissons correspondant. Le compteur brut reste visible en petit sous
-chaque pourcentage. Le même calcul est appliqué au total général et
-séparément à chaque Gutting.
+Throughput is calculated from changes in `fish_counter` over `dashboard.productivity_window_s`. To display staffing from Modbus, add `people_count` to the chosen device's `input_registers`, then configure `dashboard.people_device` and `dashboard.people_key`.
 
-### 5.5 Compteurs eau / électricité
+Good, Bad and Belly are displayed as percentages of the corresponding total fish count, with the raw count below each percentage. The same calculation is used for the overall total and each gutting machine separately.
 
-Deux devices provisoires sont fournis dans `config.yaml` : slaves 10 et 11,
-désactivés par défaut. Le lecteur accepte `uint16`, `int16`, `uint32`,
-`int32` et `float32`, avec `word_order`, `scale`, `offset` et `decimals`.
-Remplacer les adresses/types par ceux des notices puis passer chaque device à
-`enabled: true`.
 
-Les valeurs jour/mois et les états de connexion apparaissent automatiquement
-dans le dashboard et dans le JSON MQTT `factory/cutting-gutting/scada/state`.
-La page Ecava les lit toujours via le seul tag `machine_state_json`.
+When the dashboard is launched in the foreground from an interactive SSH session, press **Space** in that terminal to save a screenshot immediately; Enter is not required. The same shortcut still works from a keyboard connected to the display.
 
-### 5.6 Heure, météo et cadence par worker
+When the dashboard runs as a systemd service, its standard input is not connected to SSH. Trigger a screenshot with:
 
-Le dashboard affiche une grande horloge. Par défaut, le thread léger
-`WeatherManager` appelle Open-Meteo toutes les 10 minutes avec les
-coordonnées de la section `weather` et récupère `temperature_2m` et
-`weather_code`. Aucune clé API n'est nécessaire. Les coordonnées fournies sont
-celles de Taiping et doivent être remplacées si la machine se trouve
-ailleurs.
+```bash
+sudo systemctl kill --signal=SIGUSR1 --kill-who=main dashboard.service
+```
 
-La météo peut aussi être remplacée par MQTT sur le topic défini par
-`mqtt.weather_topic` (par défaut `factory/cutting-gutting/weather`). Le
-payload peut être `{"temperature_c":27.4,"condition":"cloudy"}` ou une
-température simple. Un message retained est accepté pour disposer d'une
-valeur au boot.
+Files are written as timestamped PNGs to `dashboard.screenshot_dir` (`screenshots/` by default, relative to the service working directory). A confirmation appears for three seconds and the full path is written to the service log. Use `journalctl -u dashboard.service -n 20` to retrieve that path remotely.
 
-La cadence par worker est calculée en temps réel avec
-`productivité_totale_poissons_minute / personnes_présentes`. Elle affiche
-`--` si le compteur de personnes est absent ou égal à zéro. En attendant un
-registre Modbus, le nombre peut être publié en retained sur
-`factory/cutting-gutting/people_count` sous forme scalaire (`7`) ou JSON
-(`{"people_count":7}`).
+### 5.5 Water and electricity meters
 
-### 5.7 Pauses et remise à zéro
+Two provisional devices are included in `config.yaml`: slaves 10 and 11, disabled by default. The reader supports `uint16`, `int16`, `uint32`, `int32` and `float32`, with `word_order`, `scale`, `offset` and `decimals`. Replace the addresses and types using the meter manuals, then set each device to `enabled: true`.
 
-Les quatre pauses par défaut sont définies dans `schedule.breaks`. Ecava
-envoie leur modification avec une commande `target: system` ; la RPi les
-trie, les valide puis les sauvegarde dans `runtime_settings.json`. Pygame
-affiche l'heure de la prochaine pause et le temps restant, en passant
-automatiquement à la première pause du lendemain après la dernière pause.
+Daily/monthly values and connection status automatically appear in the dashboard and the MQTT JSON state at `factory/cutting-gutting/scada/state`. Ecava reads them through the same `machine_state_json` tag.
 
-Le Reset Ecava capture les compteurs courants comme offsets logiciels. Il
-remet à zéro les statistiques affichées et les courbes, sans écrire dans les
-registres Modbus et sans modifier les réglages CIP. Les offsets sont
-persistants et également publiés dans le JSON MQTT d'état.
+### 5.6 Time, weather and rate per worker
 
-### 5.8 Dépannage rapide
+The dashboard displays a large clock. By default, the lightweight `WeatherManager` thread calls Open-Meteo every 10 minutes using the coordinates in `weather`, retrieving `temperature_2m` and `weather_code`. No API key is required. The supplied coordinates are for Taiping; replace them if the machine is elsewhere.
 
-| Symptôme | Cause probable | Action |
+Weather can also be supplied through `mqtt.weather_topic` (default: `factory/cutting-gutting/weather`). The payload can be `{"temperature_c":27.4,"condition":"cloudy"}` or a plain temperature. Retained messages provide a value at startup.
+
+Rate per worker is calculated in real time as `total_fish_per_minute / people_present`. It shows `--` when the people count is missing or zero. Until a Modbus register is available, publish the count as a retained message on `factory/cutting-gutting/people_count`, either as a scalar (`7`) or JSON (`{"people_count":7}`).
+
+### 5.7 Breaks and counter reset
+
+The four default break times are defined in `schedule.breaks`. Ecava sends updates with a `target: system` command. The RPi sorts and validates them, then saves them to `runtime_settings.json`. Pygame displays the next break and time remaining, automatically moving to the first break of the following day after the final break.
+
+Ecava's reset command captures current counters as software offsets. It resets displayed statistics and graphs without writing Modbus registers or changing CIP settings. Offsets persist and are included in the MQTT state JSON.
+
+### 5.8 Quick troubleshooting
+
+| Symptom | Likely cause | Action |
 |---|---|---|
-| `pygame.error: kmsdrm not available` en mode bureau | Compositeur détient déjà le périphérique DRM | Repasser en Console Autologin (§2.1) |
-| `kmsdrm not available` même en console | pygame lié à une SDL2 embarquée (venv sans `--system-site-packages`) | Refaire §1.2–1.4 |
-| `fbcon not available` aussi | `/dev/dri` absent, overlay KMS non activé | Vérifier `dtoverlay=vc4-kms-v3d` dans `/boot/firmware/config.txt` |
-| `PinFactoryFallback` → `NativeFactory` | `lgpio`/`RPi.GPIO`/`pigpio` absents ou venv isolé | Installer `python3-lgpio` (§1.2) + recréer venv avec `--system-site-packages` |
-| Pas de communication Modbus sur `/dev/serial0` | UART non activé ou toujours assigné au Bluetooth | Refaire §3.1–3.3, vérifier `dtoverlay=disable-bt` et `hciuart` désactivé |
-| `PermissionError` sur `/dev/serial0` ou `/dev/ttyAMA0` | Utilisateur pas dans le groupe `dialout` | `sudo usermod -aG dialout lastra` puis se reconnecter |
-| RAM qui grossit sur plusieurs jours | Fuite dans la logique de reconnexion Modbus/MQTT (hors `dashboard.py`) | Vérifier les boucles de retry dans `main.py` / le module d'état partagé |
+| `pygame.error: kmsdrm not available` in desktop mode | The compositor already owns the DRM device | Switch to Console Autologin (section 2.1) |
+| `kmsdrm not available` even in console mode | pygame uses bundled SDL2 in a virtual environment without `--system-site-packages` | Repeat sections 1.2–1.4 |
+| `fbcon not available` too | `/dev/dri` is missing or the KMS overlay is disabled | Check `dtoverlay=vc4-kms-v3d` in `/boot/firmware/config.txt` |
+| `PinFactoryFallback` → `NativeFactory` | Missing `lgpio` / `RPi.GPIO` / `pigpio`, or an isolated virtual environment | Install `python3-lgpio` (section 1.2) and recreate the environment with `--system-site-packages` |
+| No Modbus communication on `/dev/serial0` | UART is disabled or still assigned to Bluetooth | Repeat sections 3.1–3.3; check `dtoverlay=disable-bt` and that `hciuart` is disabled |
+| `PermissionError` on `/dev/serial0` or `/dev/ttyAMA0` | The user is not in `dialout` | Run `sudo usermod -aG dialout lastra`, then log in again |
+| RAM usage grows over several days | A leak in Modbus/MQTT reconnection logic outside `dashboard.py` | Inspect retry loops in `main.py` and the shared state module |

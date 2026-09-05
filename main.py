@@ -31,6 +31,7 @@ def main():
     if args.windowed:
         cfg["dashboard"]["fullscreen"] = False
     stop_event = threading.Event()
+    screenshot_event = threading.Event()
     settings_path = Path(args.config).resolve().parent / cfg["machine"].get(
         "runtime_settings_file", "runtime_settings.json"
     )
@@ -62,6 +63,8 @@ def main():
 
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
+    if hasattr(signal, "SIGUSR1"):
+        signal.signal(signal.SIGUSR1, lambda *_: screenshot_event.set())
     modbus.start()
     # Les solénoïdes CIP sont maintenant pilotés par le CP-IO22. On conserve
     # les fonctions Waveshare dans le firmware, mais on les force à OFF au boot.
@@ -76,7 +79,7 @@ def main():
     if weather_thread:
         weather_thread.start()
     try:
-        run_dashboard(cfg["dashboard"], cfg["devices"], state, stop_event)
+        run_dashboard(cfg["dashboard"], cfg["devices"], state, stop_event, screenshot_event)
     finally:
         stop_event.set()
         for worker in (modbus, gpio, mqtt_thread, weather_thread):
