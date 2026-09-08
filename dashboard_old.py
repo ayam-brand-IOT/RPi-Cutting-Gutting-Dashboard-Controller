@@ -22,7 +22,7 @@ PANEL = (16, 27, 43)
 PANEL_2 = (12, 22, 36)
 LINE = (39, 56, 77)
 TEXT = (239, 245, 251)
-MUTED = (168, 184, 203)
+MUTED = (137, 154, 174)
 GREEN = (43, 210, 145)
 BLUE = (68, 158, 255)
 CYAN = (57, 211, 221)
@@ -33,14 +33,11 @@ RED_DARK = (75, 24, 35)
 
 @functools.lru_cache(maxsize=64)
 def _font(size, bold=False):
-    return pygame.font.SysFont("DejaVu Sans", max(14, int(size)), bold=bold)
+    return pygame.font.SysFont("DejaVu Sans", max(10, int(size)), bold=bold)
 
 
 def _text(screen, value, position, size=18, color=TEXT, bold=False,
-          anchor="topleft", max_width=None):
-    if max_width is not None:
-        while size > 14 and _font(size, bold).size(str(value))[0] > max_width:
-            size -= 1
+          anchor="topleft"):
     image = _font(size, bold).render(str(value), True, color)
     rect = image.get_rect()
     setattr(rect, anchor, position)
@@ -60,9 +57,8 @@ def _pill(screen, rect, label, active=False, fault=False):
         bg, fg = (17, 60, 49), GREEN
     else:
         bg, fg = (31, 45, 62), MUTED
-    if fault:
-        pygame.draw.rect(screen, bg, rect, border_radius=6)
-    _text(screen, label, rect.center, 14, fg, False, "center")
+    pygame.draw.rect(screen, bg, rect, border_radius=rect.h // 2)
+    _text(screen, label, rect.center, 12, fg, True, "center")
 
 
 def _value(device, key, default=0):
@@ -172,12 +168,12 @@ def _kpi(screen, rect, title, value, subtitle, color=TEXT, hero=False):
     _panel(screen, rect)
     compact = rect.w < 180
     _text(screen, title.upper(), (rect.x + 14, rect.y + 15),
-          16, MUTED, True)
+          10 if compact else 12, MUTED, True)
     _text(screen, value, (rect.centerx, rect.centery + (8 if hero else 3)),
-          (50 if compact else 56) if hero else (38 if compact else 42),
+          (50 if compact else 56) if hero else (29 if compact else 34),
           color, True, "center")
     _text(screen, subtitle, (rect.centerx, rect.bottom - 17),
-          16, MUTED,
+          9 if compact else 11, MUTED,
           False, "midbottom")
 
 
@@ -185,14 +181,14 @@ def _people_kpi(screen, rect, people, cadence):
     _panel(screen, rect)
     _text(screen, "PEOPLE", (rect.x + 14, rect.y + 15), 10, MUTED, True)
     _text(screen, "--" if people is None else people,
-          (rect.centerx, rect.y + 49), 36, CYAN if people is not None else MUTED,
+          (rect.centerx, rect.y + 55), 32, CYAN if people is not None else MUTED,
           True, "center")
-    pygame.draw.line(screen, LINE, (rect.x + 14, rect.y + 72),
-                     (rect.right - 14, rect.y + 72), 1)
-    _text(screen, "RATE / WORKER", (rect.centerx, rect.y + 87),
+    pygame.draw.line(screen, LINE, (rect.x + 14, rect.y + 83),
+                     (rect.right - 14, rect.y + 83), 1)
+    _text(screen, "RATE / WORKER", (rect.centerx, rect.y + 99),
           9, MUTED, True, "center")
     cadence_text = "--" if cadence is None else f"{cadence:.1f}"
-    _text(screen, cadence_text, (rect.centerx, rect.y + 108),
+    _text(screen, cadence_text, (rect.centerx, rect.y + 121),
           19, BLUE if cadence is not None else MUTED, True, "center")
     _text(screen, "fish/min", (rect.centerx, rect.bottom - 6),
           8, MUTED, False, "midbottom")
@@ -203,11 +199,11 @@ def _quality_kpi(screen, rect, title, count, total, color):
     compact = rect.w < 180
     percentage = (100.0 * count / total) if total > 0 else 0.0
     _text(screen, title.upper(), (rect.x + 14, rect.y + 15),
-          16, MUTED, True)
+          10 if compact else 12, MUTED, True)
     _text(screen, f"{percentage:.1f}%", (rect.centerx, rect.centery + 2),
-          32 if compact else 36, color, True, "center")
+          27 if compact else 32, color, True, "center")
     _text(screen, f"{count} fish", (rect.centerx, rect.bottom - 17),
-          16, MUTED, False, "midbottom")
+          9 if compact else 11, MUTED, False, "midbottom")
 
 
 def _alarm_banner(screen, rect, trips, offline):
@@ -226,15 +222,19 @@ def _alarm_banner(screen, rect, trips, offline):
         _text(screen, "  •  ".join(offline), (rect.right - 20, rect.centery),
               15, TEXT, False, "midright")
     else:
-        pygame.draw.circle(screen, GREEN, (rect.x + 8, rect.centery), 4)
-        _text(screen, "NORMAL PRODUCTION", (rect.x + 20, rect.centery),
+        pygame.draw.rect(screen, (14, 48, 41), rect, border_radius=14)
+        pygame.draw.rect(screen, (26, 92, 73), rect, 1, border_radius=14)
+        _text(screen, "✓  NORMAL PRODUCTION", (rect.x + 20, rect.centery),
               17, GREEN, True, "midleft")
+        _text(screen, "No motor trips", (rect.right - 20, rect.centery),
+              14, MUTED, False, "midright")
 
 
 def _sparkline(screen, rect, values, color):
     pygame.draw.rect(screen, PANEL_2, rect, border_radius=9)
-    for index in (1,):
-        y = rect.y + rect.h * index // 2
+    pygame.draw.rect(screen, LINE, rect, 1, border_radius=9)
+    for index in (1, 2):
+        y = rect.y + rect.h * index // 3
         pygame.draw.line(screen, (27, 42, 59), (rect.x + 7, y),
                          (rect.right - 7, y), 1)
     if len(values) < 2:
@@ -259,8 +259,8 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
     color = RED_DARK if trip else PANEL
     border = RED if trip else LINE
     _panel(screen, rect, color, border)
-    _text(screen, title, (rect.x + 16, rect.y + 12), 21, TEXT, True)
-    status_rect = pygame.Rect(rect.right - 106, rect.y + 12, 90, 22)
+    _text(screen, title, (rect.x + 16, rect.y + 14), 17, TEXT, True)
+    status_rect = pygame.Rect(rect.right - 112, rect.y + 11, 96, 27)
     if trip:
         _pill(screen, status_rect, "MOTOR TRIP", fault=True)
     elif not online:
@@ -268,49 +268,41 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
     else:
         _pill(screen, status_rect, "ONLINE", active=True)
 
-    # Five equally prominent metrics, including throughput for each side.
+    stats_width = rect.w - 20
     total = stats["total"]
-    stat_items = (("FISH/MIN", f"{productivity:.1f}", "", BLUE),
-                  ("DAILY TOTAL", str(total), "fish", CYAN),
-                  ("GOOD", f"{100.0 * stats['good'] / total if total else 0.0:.1f}%",
-                   f"{stats['good']} fish", GREEN),
-                  ("BAD", f"{100.0 * stats['bad'] / total if total else 0.0:.1f}%",
-                   f"{stats['bad']} fish", RED if stats["bad"] else MUTED),
-                  ("BELLY", f"{100.0 * stats['belly'] / total if total else 0.0:.1f}%",
-                   f"{stats['belly']} fish", AMBER))
-    for index, (label, value, subtitle, stat_color) in enumerate(stat_items):
-        cx = rect.x + 10 + int((rect.w - 20) * (index + 0.5) / 5)
-        _text(screen, label, (cx, rect.y + 50), 15, MUTED, True, "center")
-        _text(screen, value, (cx, rect.y + 77), 30, stat_color, True, "center",
-              max_width=(rect.w - 20) // 5 - 8)
-        _text(screen, subtitle, (cx, rect.y + 102), 14, MUTED, False, "center")
+    stat_items = (("DAILY TOTAL", stats["total"], None, BLUE),
+                  ("GOOD", stats["good"],
+                   100.0 * stats["good"] / total if total else 0.0, GREEN),
+                  ("BAD", stats["bad"],
+                   100.0 * stats["bad"] / total if total else 0.0,
+                   RED if stats["bad"] else MUTED),
+                  ("BELLY", stats["belly"],
+                   100.0 * stats["belly"] / total if total else 0.0, AMBER))
+    for index, (label, count, percentage, stat_color) in enumerate(stat_items):
+        cx = rect.x + 10 + int(stats_width * (index + 0.5) / 4)
+        _text(screen, label, (cx, rect.y + 45), 9, MUTED, True, "center")
+        main_value = str(count) if percentage is None else f"{percentage:.1f}%"
+        _text(screen, main_value, (cx, rect.y + 66), 18, stat_color, True, "center")
+        _text(screen, "fish" if percentage is None else f"{count} fish",
+              (cx, rect.y + 84), 8, MUTED, False, "center")
 
     motor_on = bool(values.get("motors_on"))
     belt_on = bool(values.get("belt_on"))
-    status_y = rect.y + 123
-    _status_light(screen, (rect.x + 21, status_y), "MOTORS", motor_on,
-                  available=online, fault=trip)
-    _status_light(screen, (rect.x + 161, status_y), "BELT", belt_on,
-                  available=online)
+    _text(screen, f"PRODUCTIVITY  {productivity:.1f} fish/min",
+          (rect.x + 14, rect.y + 101), 10, BLUE, True, "midleft")
+    _text(screen, "MOTORS " + ("ON" if motor_on else "OFF"),
+          (rect.centerx - 42, rect.y + 101), 9,
+          GREEN if motor_on else MUTED, True, "midright")
+    _text(screen, "BELT " + ("ON" if belt_on else "OFF"),
+          (rect.centerx + 5, rect.y + 101), 9,
+          GREEN if belt_on else MUTED, True, "midleft")
     _text(screen, "RPM  {} / {} / {}".format(
         values.get("rpm_blade", 0), values.get("rpm_wheel1", 0),
         values.get("rpm_wheel2", 0)),
-        (rect.right - 14, status_y), 14, MUTED, False, "midright")
+        (rect.right - 14, rect.y + 101), 9, MUTED, False, "midright")
 
-    graph = pygame.Rect(rect.x + 13, rect.y + 140, rect.w - 26, rect.h - 150)
-    if graph.h >= 20:
-        _sparkline(screen, graph, history, BLUE)
-
-
-def _status_light(screen, center, label, active, available=True, fault=False):
-    color = RED if fault else (GREEN if active else MUTED) if available else AMBER
-    x, y = center
-    pygame.draw.circle(screen, tuple(channel // 4 for channel in color), center, 9)
-    pygame.draw.circle(screen, color, center, 6)
-    if available and active and not fault:
-        pygame.draw.circle(screen, (204, 255, 231), (x - 1, y - 2), 2)
-    state = "TRIP" if fault else ("ON" if active else "OFF") if available else "--"
-    _text(screen, f"{label} {state}", (x + 14, y), 14, color, False, "midleft")
+    graph = pygame.Rect(rect.x + 13, rect.y + 114, rect.w - 26, rect.h - 125)
+    _sparkline(screen, graph, history, BLUE)
 
 
 def _cip_card(screen, rect, title, item):
@@ -319,13 +311,13 @@ def _cip_card(screen, rect, title, item):
     _panel(screen, rect, (15, 31, 45) if output else PANEL_2,
            GREEN if output else LINE)
     pygame.draw.circle(screen, GREEN if output else (60, 76, 95),
-                       (rect.x + 17, rect.y + 19), 7)
-    _text(screen, title, (rect.x + 32, rect.y + 19), 16, TEXT, True, "midleft")
-    _pill(screen, pygame.Rect(rect.right - 90, rect.y + 6, 80, 26),
+                       (rect.x + 17, rect.centery), 6)
+    _text(screen, title, (rect.x + 30, rect.centery), 13, TEXT, True, "midleft")
+    _pill(screen, pygame.Rect(rect.centerx - 36, rect.centery - 12, 72, 24),
           "ACTIVE" if output else ("READY" if enabled else "OFF"),
           active=enabled or output)
-    _text(screen, f"ON {item.get('on_ms', '--')} ms  /  OFF {item.get('off_ms', '--')} ms",
-          (rect.x + 32, rect.bottom - 7), 14, MUTED, False, "bottomleft")
+    _text(screen, f"ON {item.get('on_ms', '--')} ms  •  OFF {item.get('off_ms', '--')} ms",
+          (rect.right - 12, rect.centery), 9, MUTED, False, "midright")
 
 
 def _cutting_status(screen, rect, gpio, gpio_error=""):
@@ -337,14 +329,22 @@ def _cutting_status(screen, rect, gpio, gpio_error=""):
     _panel(screen, rect, RED_DARK if trip else PANEL_2, RED if trip else LINE, 11)
     _text(screen, "CUTTING MACHINE", (rect.x + 20, rect.centery),
           18, TEXT, True, "midleft")
-    _status_light(screen, (rect.centerx - 155, rect.centery), "MOTORS", motor_on,
-                  available=inputs_available and not gpio_error, fault=trip)
-    _pill(screen, pygame.Rect(rect.centerx + 40, rect.centery - 13, 100, 26),
+    _text(screen, "MOTOR STATUS", (rect.centerx - 90, rect.y + 12),
+          10, MUTED, True, "center")
+    _pill(screen, pygame.Rect(rect.centerx - 140, rect.y + 25, 100, 27),
+          ("MOTORS ON" if motor_on else "MOTORS OFF") if inputs_available else "NOT CONFIG",
+          active=motor_on)
+    _text(screen, "SAFETY", (rect.centerx + 90, rect.y + 12),
+          10, MUTED, True, "center")
+    _pill(screen, pygame.Rect(rect.centerx + 45, rect.y + 25, 90, 27),
           ("TRIP ACTIVE" if trip else "TRIP OK") if inputs_available else "TRIP --",
           active=inputs_available and not trip, fault=trip)
     if gpio_error:
         _text(screen, "GPIO OFFLINE", (rect.right - 20, rect.centery),
               13, AMBER, True, "midright")
+    else:
+        _text(screen, "CP-IO22", (rect.right - 20, rect.centery),
+              12, MUTED, True, "midright")
 
 
 def _draw_drop(screen, center, color):
@@ -486,13 +486,11 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
     pygame.init()
     fullscreen = config.get("fullscreen", True)
     flags = pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE
-    display = pygame.display.set_mode((0, 0) if fullscreen else (1280, 720), flags)
-    # Keep the same readable proportions on HD and Full HD 13-inch displays.
-    screen = pygame.Surface((1280, 720))
+    screen = pygame.display.set_mode((0, 0) if fullscreen else (1280, 720), flags)
     pygame.display.set_caption("Cutting / Gutting — Production")
     pygame.mouse.set_visible(not fullscreen)
     print(f"[DISPLAY] driver={pygame.display.get_driver()} "
-          f"resolution={display.get_width()}x{display.get_height()}", flush=True)
+          f"resolution={screen.get_width()}x{screen.get_height()}", flush=True)
 
     clock = pygame.time.Clock()
     fps = int(config.get("fps", 15))
@@ -524,7 +522,7 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
             snapshot = state.snapshot()
             w, h = screen.get_size()
             screen.fill(BG)
-            margin, gap = 16, 10
+            margin, gap = 22, 12
 
             left = _device(snapshot, "vision_left")
             right = _device(snapshot, "vision_right")
@@ -562,7 +560,7 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
             people = _people_count(snapshot, config)
             cadence_worker = fish_min / people if people is not None and people > 0 else None
 
-            _text(screen, "PRODUCTION  •  CUTTING / GUTTING", (margin, 13), 18, TEXT, True)
+            _text(screen, "PRODUCTION  •  CUTTING / GUTTING", (margin, 13), 20, TEXT, True)
             mqtt_ok = snapshot.get("rpi", {}).get("mqtt_connected", False)
             _pill(screen, pygame.Rect(margin, 43, 105, 23),
                   "MQTT OK" if mqtt_ok else "MQTT OFF", active=mqtt_ok, fault=not mqtt_ok)
@@ -591,10 +589,10 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
             gpio_state = snapshot.get("rpi", {}).get("gpio", {})
             if bool(gpio_state.get("cutting_motors_trip")):
                 trips.append("Cutting machine")
-            banner = pygame.Rect(margin, 77, w - 2 * margin, 38)
+            banner = pygame.Rect(margin, 77, w - 2 * margin, 52)
             _alarm_banner(screen, banner, trips, offline)
 
-            kpi_y, kpi_h = 123, 136
+            kpi_y, kpi_h = 141, 150
             available = w - 2 * margin - 5 * gap
             widths = [int(available * 0.24), int(available * 0.18),
                       int(available * 0.13)]
@@ -620,12 +618,12 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
             machine_y = kpi_y + kpi_h + gap
             utility_h = 62
             utility_y = h - margin - utility_h
-            cip_h = 60
+            cip_h = 48
             cip_y = utility_y - gap - cip_h
             cip_title_y = cip_y - 22
-            cutting_h = 44
+            cutting_h = 58
             cutting_y = cip_title_y - gap - cutting_h
-            machine_h = cutting_y - gap - machine_y
+            machine_h = max(145, cutting_y - gap - machine_y)
             machine_w = (w - 2 * margin - gap) // 2
             _machine_card(screen, pygame.Rect(margin, machine_y, machine_w, machine_h),
                           devices.get("gutting_left", {}).get("label", "Left gutting"),
@@ -645,7 +643,7 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
                 gpio_state,
                 snapshot.get("rpi", {}).get("gpio_error", ""),
             )
-            _text(screen, "CIP — CLEANING", (margin, cip_title_y),
+            _text(screen, "CIP — RASPBERRY PI OUTPUTS / CP-IO22", (margin, cip_title_y),
                   13, MUTED, True)
             cip_w = (w - 2 * margin - 2 * gap) // 3
             cip_data = snapshot.get("rpi", {}).get("cip", {})
@@ -696,12 +694,6 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
                 pygame.draw.rect(screen, BLUE, background, 1, border_radius=9)
                 screen.blit(notice_image, notice_rect)
 
-            scale = min(display.get_width() / w, display.get_height() / h)
-            output_size = (round(w * scale), round(h * scale))
-            display.fill(BG)
-            output = (screen if output_size == screen.get_size() else
-                      pygame.transform.smoothscale(screen, output_size))
-            display.blit(output, output.get_rect(center=display.get_rect().center))
             pygame.display.flip()
             clock.tick(fps)
     finally:

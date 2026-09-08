@@ -19,8 +19,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--windowed", action="store_true")
+    parser.add_argument("--dashboard", choices=("1", "2", "old", "light", "cycle"), default="1")
     parser.add_argument("--no-mqtt", action="store_true")
     args = parser.parse_args()
+
+    dashboard_runner = run_dashboard
+    if args.dashboard == "2":
+        from dashboard2 import run_dashboard as dashboard_runner
+    elif args.dashboard == "cycle":
+        from dashboard_cycle import run_dashboard as dashboard_runner
+    elif args.dashboard == "light":
+        from dashboard_light import run_dashboard as dashboard_runner
+    elif args.dashboard == "old":
+        from dashboard_old import run_dashboard as dashboard_runner
 
     cfg = load_config(args.config)
     cfg["devices"] = {
@@ -79,7 +90,7 @@ def main():
     if weather_thread:
         weather_thread.start()
     try:
-        run_dashboard(cfg["dashboard"], cfg["devices"], state, stop_event, screenshot_event)
+        dashboard_runner(cfg["dashboard"], cfg["devices"], state, stop_event, screenshot_event)
     finally:
         stop_event.set()
         for worker in (modbus, gpio, mqtt_thread, weather_thread):

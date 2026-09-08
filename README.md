@@ -111,7 +111,7 @@ Before configuring kiosk mode, check that the program starts from a normal conso
    ```bash
    cd ~/dashboard-Cutting-Gutting
    source ~/fish-venv/bin/activate
-   python3 main.py --config config.yaml
+   python main.py --config config.yaml
    ```
 3. Check the logs for Modbus and MQTT connections and JSON publication on `factory/cutting-gutting/scada/state`.
 
@@ -470,6 +470,83 @@ The operator interface is in English, including connection status, validation me
 - Parameters are read every 10 seconds.
 
 ### 5.4 Pygame production dashboard
+
+#### Choose and launch a dashboard
+
+All five layouts run through `main.py` and share the same configuration and machine connections. Select the layout with `--dashboard`; omitting this option selects `1`.
+
+From the Raspberry Pi terminal, activate the virtual environment:
+
+```bash
+cd ~/dashboard-Cutting-Gutting
+source ~/fish-venv/bin/activate
+```
+
+If `dashboard.service` is running, stop it before launching a foreground instance so that only one application accesses the display and machine connections:
+
+```bash
+sudo systemctl stop dashboard.service
+```
+
+Run **one** of these commands:
+
+| Layout | Description | Command |
+| --- | --- | --- |
+| `1` (default) | Standard production dashboard | `python3 main.py --config config.yaml --dashboard 1` |
+| `2` | System overview with mirrored left/right production panels | `python3 main.py --config config.yaml --dashboard 2` |
+| `old` | Previous dashboard layout | `python3 main.py --config config.yaml --dashboard old` |
+| `light` | Minimal production dashboard with a dark theme | `python3 main.py --config config.yaml --dashboard light` |
+| `cycle` | Automatically alternates statistics (20 seconds) and system overview (10 seconds) | `python3 main.py --config config.yaml --dashboard cycle` |
+
+For a windowed display in a graphical session, append `--windowed`:
+
+```bash
+python3 main.py --config config.yaml --dashboard 2 --windowed
+```
+
+Append `--no-mqtt` to disable MQTT for that run. This option does not disable Modbus or GPIO. To switch layouts, stop the foreground process with **Ctrl+C**, then run the desired command. To return to the configured service after stopping the foreground process:
+
+```bash
+sudo systemctl start dashboard.service
+```
+
+#### Select the layout used at startup
+
+To choose which dashboard starts automatically, edit the `ExecStart` command in `dashboard.service` and add `--dashboard` followed by the desired layout (`1`, `2`, `old`, `light` or `cycle`). Open the service file with:
+
+```bash
+sudo nano /etc/systemd/system/dashboard.service
+```
+
+For example, append `--dashboard cycle` to the existing `ExecStart` line to start the rotating dashboard. If a `--dashboard` option is already present, replace its value. Save the file, then run the `daemon-reload` and restart commands below. The service must also be enabled to start at boot:
+
+```bash
+sudo systemctl enable dashboard.service
+```
+
+Alternatively, set the command through a systemd override. If an override already defines `ExecStart`, update it because it takes precedence over the main service file:
+
+```bash
+sudo systemctl edit dashboard.service
+```
+
+For example, use the rotating dashboard with the installation paths from this README:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/home/lastra/fish-venv/bin/python3 /home/lastra/dashboard-Cutting-Gutting/main.py --config /home/lastra/dashboard-Cutting-Gutting/config.yaml --dashboard cycle
+```
+
+The empty `ExecStart=` clears the original command. Replace `cycle` with `1`, `2`, `old` or `light` as needed, then apply the change:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart dashboard.service
+sudo systemctl status dashboard.service
+```
+
+#### Displayed information and screenshots
 
 The English dashboard emphasizes operator KPIs: fish/minute, people present, Good, Bad and Belly ejections. Each gutting machine has a rolling productivity graph. Motor trips trigger a red banner, while RPM remains visible in the machine cards. The compact CIP area shows only the three Raspberry Pi / CP-IO22 outputs. Water and electricity appear at the bottom with icons and daily/monthly consumption.
 

@@ -25,6 +25,7 @@
     .control{display:flex;align-items:center;justify-content:flex-end;gap:8px}.switch{position:relative;display:inline-block;flex:0 0 48px;width:48px;height:27px;vertical-align:middle}.switch input{display:none}.switch i{position:absolute;inset:0;border-radius:20px;background:#35475d;cursor:pointer;transition:.18s}.switch i:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;border-radius:50%;background:white;transition:.18s}.switch input:checked+i{background:var(--green)}.switch input:checked+i:before{transform:translateX(21px)}
     .cip-state{display:flex;align-items:center;gap:9px;margin:0 0 13px;padding:10px 12px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:13px}.cip-state .lamp{width:11px;height:11px}
     .value-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(38,56,80,.72);color:var(--muted)}.value-row b{color:var(--text)}
+    .ppr-info{display:inline-block;position:relative;margin-left:6px;vertical-align:middle}.info-icon{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;padding:0;border:1px solid var(--blue);border-radius:50%;background:transparent;color:var(--blue);font-size:12px;font-weight:700;cursor:help}.info-icon:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.info-tooltip{display:none;position:absolute;z-index:10;left:-85px;bottom:100%;width:min(280px,75vw);padding:12px;background:#173a5e;border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:12px;font-weight:400;line-height:1.5;box-shadow:var(--shadow)}.ppr-info:hover .info-tooltip,.ppr-info:focus-within .info-tooltip{display:block}
     #toast{position:fixed;z-index:20;right:20px;bottom:20px;max-width:380px;padding:13px 16px;border-radius:11px;background:#173a5e;color:#fff;box-shadow:0 12px 30px #0008;display:none}#toast.error{background:#642631}
     @media(max-width:1100px){.card,.card.wide{grid-column:span 6}.card.small{grid-column:span 6}}@media(max-width:680px){header{align-items:flex-start;flex-direction:column;gap:8px}.card,.card.wide,.card.small{grid-column:1/-1}.setting{grid-template-columns:1fr auto auto}.rpm b{font-size:23px}}
   </style>
@@ -235,8 +236,15 @@ function setApi(ok,text){document.getElementById('apiDot').className=ok?'dot ok'
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 
 function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
+  if(bool){min=0;max=1}
+  var info='';
+  if(/_ppr_(blade|wheel1|wheel2)_cmd$/.test(cmdKey)){
+    var part=/_ppr_blade_cmd$/.test(cmdKey)?'blade':(/_ppr_wheel1_cmd$/.test(cmdKey)?'wheel 1':'wheel 2');
+    var help='PPR = Pulses Per Revolution: sensor pulses per complete turn of the '+part+'. This calibrates the RPM measurement; it does not set motor speed. RPM = pulses per second × 60 ÷ PPR. Example: 2 magnets detected per turn means PPR = 2; 100 pulses/second gives 3,000 RPM. Firmware default: 1. Match the actual pulses per turn.';
+    info='<span class="ppr-info"><button type="button" class="info-icon" aria-label="About '+esc(label)+'" aria-describedby="'+cmdKey+'_help">i</button><span class="info-tooltip" role="tooltip" id="'+cmdKey+'_help">'+esc(help)+'</span></span>';
+  }
   var input=bool?'<label class="switch"><input type="checkbox" data-command="'+cmdKey+'"><i></i></label>':'<input type="number" data-command="'+cmdKey+'" min="'+min+'" max="'+max+'">';
-  return '<div class="setting"><label>'+esc(label)+'</label><span class="actual" data-value="'+actualKey+'">-- <small>'+esc(unit||'')+'</small></span><span class="control">'+input+'<button class="apply" data-apply="'+cmdKey+'" data-min="'+(min===undefined?'':min)+'" data-max="'+(max===undefined?'':max)+'">✓</button></span></div>';
+  return '<div class="setting"><label>'+esc(label)+info+'</label><span class="actual" data-value="'+actualKey+'">-- <small>'+esc(unit||'')+'</small></span><span class="control">'+input+'<button class="apply" data-apply="'+cmdKey+'" data-min="'+(min===undefined?'':min)+'" data-max="'+(max===undefined?'':max)+'">✓</button></span></div>';
 }
 function build(){
   var cip=document.getElementById('cipCards'),html='',i,c,p;

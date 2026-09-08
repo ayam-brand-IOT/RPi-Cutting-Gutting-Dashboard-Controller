@@ -60,9 +60,9 @@ gpio:
     cutting_motors_on:   {enabled: false, pin: 20, pull_up: false}
     cutting_motors_trip: {enabled: false, pin: 21, pull_up: false}
   cip:
-    gutting_left:  {pin: 17, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
-    cutting:       {pin: 18, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
-    gutting_right: {pin: 19, active_high: true, enable: false, on_ms: 200, off_ms: 8000}
+    gutting_left:  {pin: 17, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
+    cutting:       {pin: 18, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
+    gutting_right: {pin: 19, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
 
 # Toutes les adresses ci-dessous sont des offsets zéro-based pour pymodbus.
 # 0 = 30001 pour Input Register, 0 = 40001 pour Holding Register.
@@ -99,6 +99,12 @@ devices:
       eject_duration_ms: {address: 1, min: 10, max: 5000}
       cip_on_ms: {address: 2, min: 100, max: 60000}
       cip_off_ms: {address: 3, min: 100, max: 60000}
+      # PPR (Pulses Per Revolution) = number of sensor pulses per complete turn.
+      # Blade PPR applies to the blade; Wheel 1 / Wheel 2 PPR applies to each wheel.
+      # These settings calibrate the RPM measurement; they do not set motor speed.
+      # RPM = pulses per second x 60 / PPR.
+      # Example: 2 magnets detected per turn => PPR = 2; 100 pulses/s => 3000 RPM.
+      # Firmware default: 1. Match the actual number of pulses per turn.
       ppr_blade: {address: 4, min: 1, max: 999}
       ppr_wheel1: {address: 5, min: 1, max: 999}
       ppr_wheel2: {address: 6, min: 1, max: 999}
