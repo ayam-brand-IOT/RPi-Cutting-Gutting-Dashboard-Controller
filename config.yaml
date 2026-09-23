@@ -47,22 +47,33 @@ weather:
   timeout_s: 8
 
 schedule:
-  breaks: ["09:00", "12:00", "15:00", "18:00"]
-
-# CP-IO22 : sorties NPN. Numérotation BCM (OUT1=17, OUT2=18, OUT3=19).
+  breaks: ["09:00", "12:00", "15:00", "18:00"] 
+  
 gpio:
   enabled: true
   disable_waveshare_cip_on_start: true
-  # Entrées BCM provisoires pour les retours contacteurs Cutting machine.
-  # Désactivées tant que les véritables entrées CP-IO22 ne sont pas confirmées.
-  # pull_up: false = entrée active HIGH. Adapter pins/polarité au câblage réel.
+  # CP-IO22 inputs: BCM4..13, BCM16. Outputs: BCM17..27.
+  # Presence: one maintained sensor per workstation; HIGH means occupied.
+  # Set active_low: true if the actual sensor/board signal is inverted.
+  # No internal pull: the CP-IO22 provides the input conditioning.
   inputs:
-    cutting_motors_on:   {enabled: false, pin: 20, pull_up: false}
-    cutting_motors_trip: {enabled: false, pin: 21, pull_up: false}
+    people_left_1:  {enabled: true, pin: 4,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
+    people_left_2:  {enabled: true, pin: 5,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
+    people_left_3:  {enabled: true, pin: 6,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
+    people_left_4:  {enabled: true, pin: 7,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
+    people_right_1: {enabled: true, pin: 8,  pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
+    people_right_2: {enabled: true, pin: 9,  pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
+    people_right_3: {enabled: true, pin: 10, pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
+    people_right_4: {enabled: true, pin: 11, pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
+    # Reserved real input pins; keep disabled until motor feedback is wired.
+    cutting_motors_on:   {enabled: false, pin: 12, pull_up: null, active_low: false}
+    cutting_motors_trip: {enabled: false, pin: 13, pull_up: null, active_low: false}
+    # BCM16 remains spare. BCM17/18/19 remain the CIP outputs.
+  # CIP durations in SECONDS (s): 2 s ON, 10 s OFF. Decimals allowed.
   cip:
-    gutting_left:  {pin: 17, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
-    cutting:       {pin: 18, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
-    gutting_right: {pin: 19, active_high: true, enable: true, on_ms: 200, off_ms: 8000}
+    gutting_left:  {pin: 17, active_high: true, enable: true, on_s: 2, off_s: 10}
+    cutting:       {pin: 18, active_high: true, enable: true, on_s: 2, off_s: 10}
+    gutting_right: {pin: 19, active_high: true, enable: true, on_s: 2, off_s: 10}
 
 # Toutes les adresses ci-dessous sont des offsets zéro-based pour pymodbus.
 # 0 = 30001 pour Input Register, 0 = 40001 pour Holding Register.
@@ -73,7 +84,7 @@ devices:
     slave: 3
     type: gutting
     input_blocks:
-      - {address: 0, count: 19}
+      - {address: 0, count: 20}
     input_registers:
       rpm_blade: 0
       rpm_wheel1: 1
@@ -94,23 +105,19 @@ devices:
       uptime_lo: 16
       uptime_hi: 17
       fw_version: 18
+      rpm_belt: 19
     holding_registers:
       eject_delay_ms: {address: 0, min: 0, max: 9999}
       eject_duration_ms: {address: 1, min: 10, max: 5000}
-      cip_on_ms: {address: 2, min: 100, max: 60000}
-      cip_off_ms: {address: 3, min: 100, max: 60000}
-      # PPR (Pulses Per Revolution) = number of sensor pulses per complete turn.
-      # Blade PPR applies to the blade; Wheel 1 / Wheel 2 PPR applies to each wheel.
-      # These settings calibrate the RPM measurement; they do not set motor speed.
-      # RPM = pulses per second x 60 / PPR.
-      # Example: 2 magnets detected per turn => PPR = 2; 100 pulses/s => 3000 RPM.
-      # Firmware default: 1. Match the actual number of pulses per turn.
-      ppr_blade: {address: 4, min: 1, max: 999}
-      ppr_wheel1: {address: 5, min: 1, max: 999}
-      ppr_wheel2: {address: 6, min: 1, max: 999}
-      blade_rpm_min: {address: 7, min: 0, max: 9999}
-      debounce_ms: {address: 8, min: 0, max: 100}
-    coils:
+      # CIP limits in SECONDS; *_ms keys name native Modbus registers.
+      cip_on_ms: {address: 2, min_s: 0.1, max_s: 60}
+      cip_off_ms: {address: 3, min_s: 0.1, max_s: 60}
+      ppr_blade: {address: 4, min: 1, max: 999}         # PPR (Pulses Per Revolution) = number of sensor pulses per complete turn.
+      ppr_wheel1: {address: 5, min: 1, max: 999}        # Blade PPR applies to the blade; Wheel 1 / Wheel 2 PPR applies to each wheel.
+      ppr_wheel2: {address: 6, min: 1, max: 999}        # These settings calibrate the RPM measurement; they do not set motor speed.
+      blade_rpm_min: {address: 7, min: 0, max: 9999}    # RPM = pulses per second x 60 / PPR.
+      debounce_ms: {address: 8, min: 0, max: 100}       # Example: 2 magnets detected per turn => PPR = 2; 100 pulses/s => 3000 RPM.
+      coils:                                            # Firmware default: 1. Match the actual number of pulses per turn.
       eject_enable: {address: 0}
       cip_enable: {address: 1}
       alarm_ack: {address: 2}

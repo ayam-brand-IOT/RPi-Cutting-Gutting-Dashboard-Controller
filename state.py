@@ -63,9 +63,16 @@ class StateStore:
                 device["values"] = values
             self._data["timestamp"] = time.time()
 
-    def update_gpio(self, values: dict[str, bool], cip=None):
+    def update_gpio(self, values: dict[str, bool], cip=None, people_counts=None):
         with self._lock:
             self._data["rpi"]["gpio"] = dict(values)
+            if people_counts is not None:
+                counts = dict(people_counts)
+                self._data["rpi"]["people_gpio"] = counts
+                self._data["rpi"]["people_gpio_total"] = (
+                    sum(counts.values()) if all(counts.get(side) is not None
+                                               for side in ("left", "right")) else None
+                )
             if cip is not None:
                 self._data["rpi"]["cip"] = copy.deepcopy(cip)
             self._data["rpi"]["gpio_error"] = ""
@@ -82,6 +89,9 @@ class StateStore:
     def set_gpio_error(self, error: str):
         with self._lock:
             self._data["rpi"]["gpio_error"] = error
+            if "people_gpio" in self._data["rpi"]:
+                self._data["rpi"]["people_gpio"] = {"left": None, "right": None}
+                self._data["rpi"]["people_gpio_total"] = None
             self._data["timestamp"] = time.time()
 
     def set_mqtt_connected(self, connected: bool):
@@ -100,6 +110,18 @@ class StateStore:
     def update_people_count(self, value):
         with self._lock:
             self._data["rpi"]["people_count"] = max(0, int(value))
+            self._data["rpi"].pop("people_by_machine", None)
+            self._data["timestamp"] = time.time()
+
+    def update_people_counts(self, left, right):
+        """Store one complete per-machine reading and its total atomically."""
+        counts = {"left": left, "right": right}
+        if any(isinstance(v, bool) or not isinstance(v, int) or v < 0
+               for v in counts.values()):
+            raise ValueError("left and right must be non-negative integers")
+        with self._lock:
+            self._data["rpi"]["people_by_machine"] = counts
+            self._data["rpi"]["people_count"] = left + right
             self._data["timestamp"] = time.time()
 
     def update_breaks(self, breaks):

@@ -273,10 +273,10 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
     stat_items = (("DAILY TOTAL", stats["total"], None, BLUE),
                   ("GOOD", stats["good"],
                    100.0 * stats["good"] / total if total else 0.0, GREEN),
-                  ("BAD", stats["bad"],
+                  ("REJECTED", stats["bad"],
                    100.0 * stats["bad"] / total if total else 0.0,
                    RED if stats["bad"] else MUTED),
-                  ("BELLY", stats["belly"],
+                  ("WRONG SIDE", stats["belly"],
                    100.0 * stats["belly"] / total if total else 0.0, AMBER))
     for index, (label, count, percentage, stat_color) in enumerate(stat_items):
         cx = rect.x + 10 + int(stats_width * (index + 0.5) / 4)
@@ -306,6 +306,9 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
 
 
 def _cip_card(screen, rect, title, item):
+    # State durations are milliseconds; display seconds.
+    on_s = '--' if item.get('on_ms') is None else f"{item['on_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
+    off_s = '--' if item.get('off_ms') is None else f"{item['off_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
     enabled = bool(item.get("enable"))
     output = bool(item.get("output"))
     _panel(screen, rect, (15, 31, 45) if output else PANEL_2,
@@ -316,7 +319,7 @@ def _cip_card(screen, rect, title, item):
     _pill(screen, pygame.Rect(rect.centerx - 36, rect.centery - 12, 72, 24),
           "ACTIVE" if output else ("READY" if enabled else "OFF"),
           active=enabled or output)
-    _text(screen, f"ON {item.get('on_ms', '--')} ms  •  OFF {item.get('off_ms', '--')} ms",
+    _text(screen, f"ON {on_s} s  •  OFF {off_s} s",
           (rect.right - 12, rect.centery), 9, MUTED, False, "midright")
 
 
@@ -602,14 +605,14 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
                       ("Daily total", total, "fish today", CYAN, False),
                       ("People", people, "", CYAN, False),
                       ("Good", good, "good fish", GREEN, False),
-                      ("Bad", bad, "vision ejections", RED if bad else AMBER, False),
-                      ("Belly", belly, "orientation ejections", AMBER, False))
+                      ("Rejected", bad, "vision ejections", RED if bad else AMBER, False),
+                      ("Wrong side", belly, "orientation ejections", AMBER, False))
             x = margin
             for width, item in zip(widths, titles):
                 rect = pygame.Rect(x, kpi_y, width, kpi_h)
                 if item[0] == "People":
                     _people_kpi(screen, rect, people, cadence_worker)
-                elif item[0] in ("Good", "Bad", "Belly"):
+                elif item[0] in ("Good", "Rejected", "Wrong side"):
                     _quality_kpi(screen, rect, item[0], item[1], total, item[3])
                 else:
                     _kpi(screen, rect, *item)

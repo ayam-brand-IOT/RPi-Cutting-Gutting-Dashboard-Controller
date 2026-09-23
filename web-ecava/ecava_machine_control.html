@@ -15,7 +15,7 @@
     .section-title{display:flex;align-items:end;justify-content:space-between;margin:24px 0 13px}.section-title h2{font-size:18px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:15px}.card{grid-column:span 4;background:linear-gradient(145deg,var(--panel),#0d1929);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}.card.wide{grid-column:span 6}.card.small{grid-column:span 3}
     .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.card-head h3{font-size:17px;margin:0}.badge{padding:5px 9px;border-radius:20px;background:#26374c;color:var(--muted);font-size:11px;font-weight:700}.badge.online,.badge.active{color:var(--green);background:#123e31}.badge.fault{color:var(--red);background:#4a2029}
-    .rpm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:17px}.rpm{text-align:center;background:var(--panel2);border:1px solid #1e3046;border-radius:12px;padding:12px 5px}.rpm b{display:block;font-size:clamp(21px,2.4vw,31px);color:var(--blue)}.rpm span{font-size:10px;color:var(--muted);text-transform:uppercase}
+    .rpm-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:17px}.rpm{text-align:center;background:var(--panel2);border:1px solid #1e3046;border-radius:12px;padding:12px 5px}.rpm b{display:block;font-size:clamp(21px,2.4vw,31px);color:var(--blue)}.rpm span{font-size:10px;color:var(--muted);text-transform:uppercase}
     .leds{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.led{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}.lamp{width:9px;height:9px;border-radius:50%;background:#415167}.lamp.on{background:var(--green);box-shadow:0 0 9px rgba(46,208,145,.55)}.lamp.alarm.on{background:var(--red);box-shadow:0 0 9px rgba(242,95,107,.55)}
     .setting{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;gap:9px;padding:10px 0;border-top:1px solid rgba(38,56,80,.72)}.setting:first-of-type{border-top:0}.setting label{color:var(--muted);font-size:13px}.actual{min-width:74px;text-align:right;color:var(--amber);font-weight:700;font-size:13px}.actual small{font-weight:400;color:var(--muted)}
     input[type=number]{width:112px;background:#071322;color:var(--text);border:1px solid #30445e;border-radius:9px;padding:9px 10px;outline:none}input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(75,159,255,.13)}
@@ -56,12 +56,12 @@
   <section class="grid">
     <article class="card wide" id="machine-left">
       <div class="card-head"><h3>Left gutting</h3><span class="badge" data-online="gutting_left_connected">OFFLINE</span></div>
-      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_left_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_left_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div><div class="rpm"><b data-value="gutting_left_rpm_belt">--</b><span>Belt RPM</span></div></div>
       <div class="leds"><div class="led"><i class="lamp" data-led="gutting_left_motors_on"></i>Motors</div><div class="led"><i class="lamp alarm" data-led="gutting_left_motors_trip"></i>Motor trip</div><div class="led"><i class="lamp" data-led="gutting_left_belt_on"></i>Conveyor</div><div class="led"><i class="lamp" data-led="gutting_left_belly_on"></i>Belly sensor</div></div>
     </article>
     <article class="card wide" id="machine-right">
       <div class="card-head"><h3>Right gutting</h3><span class="badge" data-online="gutting_right_connected">OFFLINE</span></div>
-      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_right_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div></div>
+      <div class="rpm-grid"><div class="rpm"><b data-value="gutting_right_rpm_blade">--</b><span>Blade RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel1">--</b><span>Wheel 1 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_wheel2">--</b><span>Wheel 2 RPM</span></div><div class="rpm"><b data-value="gutting_right_rpm_belt">--</b><span>Belt RPM</span></div></div>
       <div class="leds"><div class="led"><i class="lamp" data-led="gutting_right_motors_on"></i>Motors</div><div class="led"><i class="lamp alarm" data-led="gutting_right_motors_trip"></i>Motor trip</div><div class="led"><i class="lamp" data-led="gutting_right_belt_on"></i>Conveyor</div><div class="led"><i class="lamp" data-led="gutting_right_belly_on"></i>Belly sensor</div></div>
     </article>
   </section>
@@ -121,6 +121,14 @@ function isOn(v){return v===true || v===1 || v==='1' || String(v).toLowerCase()=
 function safeValue(v){if(v===undefined||v===null||v===''||v==='unknown')return '--';return v}
 function toast(text,bad){var e=document.getElementById('toast');e.textContent=text;e.className=bad?'error':'';e.style.display='block';window.clearTimeout(e.timer);e.timer=window.setTimeout(function(){e.style.display='none'},2800)}
 
+// Operator values are seconds; the RPi JSON protocol remains milliseconds.
+function cipSeconds(ms){return ms===undefined||ms===null?'--':Number(ms)/1000}
+function cipMilliseconds(seconds){
+  var value=Number(seconds),ms=Math.round(value*1000);
+  if(!isFinite(value)||value<0.1||value>60||Math.abs(value*1000-ms)>0.000001)throw new Error('CIP: 0.1 to 60 seconds, step 0.001 s');
+  return ms;
+}
+
 function consumeState(state){
   var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
   if(!state||typeof state!=='object')throw new Error('Invalid JSON state');
@@ -148,8 +156,8 @@ function consumeState(state){
     cip=state.rpi&&state.rpi.cip&&state.rpi.cip[name];if(!cip)continue;
     cipKey='cip_'+cipMap[name]+'_';
     latest[cipKey+'enable_actual']=cip.enable?1:0;
-    latest[cipKey+'on_actual']=cip.on_ms;
-    latest[cipKey+'off_actual']=cip.off_ms;
+    latest[cipKey+'on_actual']=cipSeconds(cip.on_ms);
+    latest[cipKey+'off_actual']=cipSeconds(cip.off_ms);
     latest[cipKey+'output']=cip.output?1:0;
   }
   breaks=state.rpi&&state.rpi.breaks?state.rpi.breaks:[];
@@ -175,7 +183,7 @@ function readAllTags(){
 function commandFromKey(key,value){
   var match,side,parameter,device;
   match=/^cip_(left|cutting|right)_(enable|on|off)_cmd$/.exec(key);
-  if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
+  if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');if(parameter!=='enable')value=cipMilliseconds(value);return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
   match=/^(gutting_left|gutting_right|vision_left|vision_right)_(.+)_cmd$/.exec(key);
   if(match){device=match[1];parameter=match[2];if(parameter==='eject_delay')parameter='eject_delay_ms';if(parameter==='eject_duration')parameter='eject_duration_ms';return {target:'modbus',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
   throw new Error('Unknown command: '+key);
@@ -226,7 +234,7 @@ function writeCommand(key,value,min,max){
     console.log('JSON command:',JSON.stringify(command));
     console.log('Base64 command:',payload);
     setTag(COMMAND_TAG,payload);
-    toast('Command sent: '+value,false);
+    toast('Command sent: '+value+(/^cip_(left|cutting|right)_(on|off)_cmd$/.test(key)?' s':''),false);
   }catch(error){
     console.error('writeCommand error:',error);
     toast('Command failed: '+error.message,true);
@@ -243,12 +251,12 @@ function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
     var help='PPR = Pulses Per Revolution: sensor pulses per complete turn of the '+part+'. This calibrates the RPM measurement; it does not set motor speed. RPM = pulses per second × 60 ÷ PPR. Example: 2 magnets detected per turn means PPR = 2; 100 pulses/second gives 3,000 RPM. Firmware default: 1. Match the actual pulses per turn.';
     info='<span class="ppr-info"><button type="button" class="info-icon" aria-label="About '+esc(label)+'" aria-describedby="'+cmdKey+'_help">i</button><span class="info-tooltip" role="tooltip" id="'+cmdKey+'_help">'+esc(help)+'</span></span>';
   }
-  var input=bool?'<label class="switch"><input type="checkbox" data-command="'+cmdKey+'"><i></i></label>':'<input type="number" data-command="'+cmdKey+'" min="'+min+'" max="'+max+'">';
+  var input=bool?'<label class="switch"><input type="checkbox" data-command="'+cmdKey+'"><i></i></label>':'<input type="number" step="'+(unit==='s'?'0.001':'1')+'" aria-label="'+esc(label+(unit?' ('+unit+')':''))+'" data-command="'+cmdKey+'" min="'+min+'" max="'+max+'">';
   return '<div class="setting"><label>'+esc(label)+info+'</label><span class="actual" data-value="'+actualKey+'">-- <small>'+esc(unit||'')+'</small></span><span class="control">'+input+'<button class="apply" data-apply="'+cmdKey+'" data-min="'+(min===undefined?'':min)+'" data-max="'+(max===undefined?'':max)+'">✓</button></span></div>';
 }
 function build(){
   var cip=document.getElementById('cipCards'),html='',i,c,p;
-  for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DISABLED</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Solenoid valve output</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('ON time',c.onA,c.onC,100,60000,'ms',false)+settingHtml('OFF time',c.offA,c.offC,100,60000,'ms',false)+'</article>'}
+  for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DISABLED</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Solenoid valve output</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('ON time (seconds)',c.onA,c.onC,0.1,60,'s',false)+settingHtml('OFF time (seconds)',c.offA,c.offC,0.1,60,'s',false)+'</article>'}
   cip.innerHTML=html;
   ['Left','Right'].forEach(function(side){var prefix='gutting_'+side.toLowerCase()+'_',target=document.getElementById('params'+side),out='';for(i=0;i<PARAMS.length;i++){p=PARAMS[i];out+=settingHtml(p.label,prefix+p.key+'_actual',prefix+p.key+'_cmd',p.min,p.max,p.unit,p.bool)}target.innerHTML=out});
   var visions=[{id:'left',name:'Left vision',slave:5},{id:'right',name:'Right vision',slave:7}];html='';for(i=0;i<visions.length;i++){c=visions[i];html+='<article class="card wide"><div class="card-head"><h3>'+c.name+'</h3><span class="badge" data-online="vision_'+c.id+'_connected">OFFLINE</span></div><div class="value-row"><span>Fish detected</span><b data-value="vision_'+c.id+'_fish_counter">--</b></div><div class="value-row"><span>Fish ejected</span><b data-value="vision_'+c.id+'_ejected_fish">--</b></div>'+settingHtml('ML model','vision_'+c.id+'_ml_model_actual','vision_'+c.id+'_ml_model_cmd',0,20,'',false)+settingHtml('Ejection enabled','vision_'+c.id+'_eject_enable_actual','vision_'+c.id+'_eject_enable_cmd',0,1,'',true)+'</article>'}document.getElementById('visionCards').innerHTML=html;

@@ -153,6 +153,9 @@ class MQTTManager(threading.Thread):
                 data = json.loads(text)
             except json.JSONDecodeError:
                 data = text
+            if isinstance(data, dict) and ("left" in data or "right" in data):
+                self.state.update_people_counts(data["left"], data["right"])
+                return
             if isinstance(data, dict):
                 data = data.get("people_count", data.get("workers"))
             self.state.update_people_count(data)

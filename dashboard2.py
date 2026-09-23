@@ -99,7 +99,7 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
         ("PEOPLE", "--" if people is None else str(people),
          "-- fish/min/worker" if cadence is None else f"{cadence:.1f} fish/min/worker", TEXT),
     ]
-    for key, label, accent in (("good", "GOOD", GREEN), ("bad", "BAD / VISION", RED), ("belly", "BELLY / EJECTED", AMBER)):
+    for key, label, accent in (("good", "GOOD", GREEN), ("bad", "REJECTED / VISION", RED), ("belly", "WRONG SIDE", AMBER)):
         count = left[key] + right[key]
         percentage = 100 * count / total if total else 0
         summaries.append((label, f"{percentage:.1f}%", f"{_number(count)} fish", accent))
@@ -124,7 +124,7 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
     _text(screen, f"0–{ceiling:.0f} fish/min", (441, 377), 14, MUTED, anchor="center")
     for x, item in ((36, left), (578, right)):
         _trend(screen, pygame.Rect(x, 334, 268, 65), item["history"], ceiling)
-    for y, key, label, accent in ((433, "good", "GOOD", GREEN), (477, "bad", "BAD / VISION", RED), (521, "belly", "BELLY EJECTIONS", AMBER)):
+    for y, key, label, accent in ((433, "good", "GOOD", GREEN), (477, "bad", "REJECTED / VISION", RED), (521, "belly", "WRONG SIDE", AMBER)):
         _text(screen, label, (441, y), 15, MUTED, True, "center")
         for x, item in ((170, left), (712, right)):
             count = item[key]

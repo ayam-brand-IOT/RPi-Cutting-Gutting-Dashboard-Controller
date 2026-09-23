@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import queue
 import threading
 import time
@@ -20,14 +22,30 @@ class GPIOManager(threading.Thread):
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=50)
         self.channels = {}
         self.input_cfg = config.get("inputs", {})
+        self._presence_samples = {}
+        self._presence_stable = {}
 
         for name, item in config.get("cip", {}).items():
+            durations = {}
+            for stem, default_ms in (("on", 2000), ("off", 10000)):
+                if stem + "_s" in item:
+                    if stem + "_ms" in item:
+                        raise ValueError(f"CIP {stem}: specify seconds or milliseconds, not both")
+                    seconds = float(item[stem + "_s"])
+                    if isinstance(item[stem + "_s"], bool) or not math.isfinite(seconds) or not 0.1 <= seconds <= 60:
+                        raise ValueError("CIP duration must be 0.1–60 seconds")
+                    ms = round(seconds * 1000)
+                    if abs(seconds * 1000 - ms) > 0.000001:
+                        raise ValueError("CIP seconds support at most 3 decimal places")
+                    durations[stem] = ms
+                else:
+                    durations[stem] = int(item.get(stem + "_ms", default_ms))
             self.channels[name] = {
                 "pin": int(item["pin"]),
                 "active_high": bool(item.get("active_high", True)),
                 "enable": bool(item.get("enable", False)),
-                "on_ms": int(item.get("on_ms", 200)),
-                "off_ms": int(item.get("off_ms", 8000)),
+                "on_ms": durations["on"],
+                "off_ms": durations["off"],
                 "output": False,
                 "phase": "disabled",
                 "deadline": 0.0,
@@ -63,6 +81,8 @@ class GPIOManager(threading.Thread):
         channel["output"] = active
 
     def _setup(self):
+        if any(cfg.get("presence_side") in ("left", "right") for cfg in self.input_cfg.values()):
+            self.state.update_gpio({}, people_counts={"left": None, "right": None})
         if DigitalInputDevice is None:
             raise RuntimeError("gpiozero n'est pas installé")
 
@@ -70,6 +90,14 @@ class GPIOManager(threading.Thread):
             if not item.get("enabled", True):
                 continue
             try:
+                pin = int(item["pin"])
+                if pin not in (*range(4, 14), 16):
+                    raise ValueError("not a CP-IO22 input pin")
+                if any(int(cfg["pin"]) == pin for cfg in self.input_cfg.values()
+                       if cfg is not item and cfg.get("enabled", True)):
+                    raise ValueError("duplicate input pin")
+                if pin in {channel["pin"] for channel in self.channels.values()}:
+                    raise ValueError("pin already assigned to an output")
                 pull_up = item.get("pull_up", True)
                 kwargs = {"pull_up": pull_up}
                 if pull_up is None:
@@ -121,10 +149,31 @@ class GPIOManager(threading.Thread):
                     self._write(channel, True)
                     channel.update(phase="on", deadline=now + channel["on_ms"] / 1000.0)
 
-    def _publish_state(self):
+    def _publish_state(self, now=None):
+        now = time.monotonic() if now is None else now
         values = {}
         for name, device in self.inputs.items():
-            values[name] = bool(device.value)
+            value = bool(device.value)
+            cfg = self.input_cfg[name]
+            if cfg.get("presence_side") in ("left", "right"):
+                previous = self._presence_samples.get(name)
+                if previous is None or previous[0] != value:
+                    self._presence_samples[name] = (value, now)
+                if now - self._presence_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
+                    self._presence_stable[name] = value
+                if name in self._presence_stable:
+                    values[name] = self._presence_stable[name]
+            else:
+                values[name] = value
+        people = None
+        if any(cfg.get("presence_side") in ("left", "right") for cfg in self.input_cfg.values()):
+            people = {}
+            for side in ("left", "right"):
+                names = [name for name, cfg in self.input_cfg.items()
+                         if cfg.get("presence_side") == side and cfg.get("enabled", True)]
+                people[side] = (sum(values[name] for name in names)
+                                if len(names) == 4 and all(name in values for name in names)
+                                else None)
         cip = {
             name: {
                 "enable": channel["enable"],
@@ -136,7 +185,7 @@ class GPIOManager(threading.Thread):
             }
             for name, channel in self.channels.items()
         }
-        self.state.update_gpio(values, cip)
+        self.state.update_gpio(values, cip, people_counts=people)
 
     def run(self):
         try:

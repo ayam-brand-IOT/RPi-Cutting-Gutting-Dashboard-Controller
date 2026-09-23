@@ -72,11 +72,11 @@ def _production(screen, x, item, title, vision_online, ceiling):
     _label(screen, "fish / min", (x + 24, 307), 15, MUTED)
     _label(screen, _number(item['total']), (x + 326, 251), 38, TEAL, True, width=252)
     _label(screen, "fish today", (x + 329, 307), 15, MUTED)
-    for offset, key, label in ((24, 'good', 'Good'), (216, 'bad', 'Bad'), (408, 'belly', 'Belly')):
+    for offset, key, label in ((24, 'good', 'Good'), (216, 'bad', 'Rejected'), (408, 'belly', 'Wrong side')):
         px = x + offset
         pygame.draw.rect(screen, QUALITY_TINTS[key], (px - 8, 334, 180, 53), border_radius=7)
         _label(screen, label, (px, 343), 15, QUALITY_COLORS[key])
-        _label(screen, _percent(item, key), (px + 61, 339), 23, QUALITY_COLORS[key], True, width=105)
+        _label(screen, _percent(item, key), (px + 90, 339), 21, QUALITY_COLORS[key], True, width=82)
         _label(screen, _number(item[key]) + " fish", (px + 61, 367), 14, MUTED)
     _trend(screen, pygame.Rect(x + 24, 398, 556, 40), item['history'], ceiling)
     values = item['device'].get('values', {})
@@ -119,7 +119,7 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
                ('Productivity', f"{rate:.1f}", 'fish / min', BLUE),
                ('People', '--' if people is None else people,
                 '-- fish/min/worker' if cadence is None else f"{cadence:.1f} fish/min/worker", PURPLE)]
-    for key, label in (('good', 'Good'), ('bad', 'Bad / vision'), ('belly', 'Belly / ejected')):
+    for key, label in (('good', 'Good'), ('bad', 'Rejected / vision'), ('belly', 'Wrong side')):
         summary.append((label, _percent(total, key), _number(total[key]) + ' fish', QUALITY_COLORS[key]))
     for i, (label, value, detail, accent) in enumerate(summary):
         x = 24 + i * 208
@@ -151,7 +151,9 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
         active, enabled = bool(item.get('output')), bool(item.get('enable'))
         _label(screen, label, (444, y), 17, TEXT, anchor='midleft')
         _status(screen, 531, y, 'ACTIVE' if active else ('READY' if enabled else 'OFF'), GREEN if active else (PURPLE if enabled else MUTED))
-        _label(screen, f"ON {item.get('on_ms', '--')} / OFF {item.get('off_ms', '--')} ms", (836, y), 14, MUTED, anchor='midright', width=206)
+        on_s = '--' if item.get('on_ms') is None else f"{item['on_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
+        off_s = '--' if item.get('off_ms') is None else f"{item['off_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
+        _label(screen, f"ON {on_s} s / OFF {off_s} s", (836, y), 14, MUTED, anchor='midright', width=206)
     for y, name, label, keys, unit in ((563, 'electricity_meter', 'Electricity', ('energy_today_kwh', 'energy_month_kwh'), 'kWh'), (637, 'water_meter', 'Water', ('water_today_m3', 'water_month_m3'), 'm³')):
         device = _device(snapshot, name)
         online = bool(device.get('connected'))

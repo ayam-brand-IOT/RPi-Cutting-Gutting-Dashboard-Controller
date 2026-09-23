@@ -598,3 +598,154 @@ Ecava's reset command captures current counters as software offsets. It resets d
 | No Modbus communication on `/dev/serial0` | UART is disabled or still assigned to Bluetooth | Repeat sections 3.1–3.3; check `dtoverlay=disable-bt` and that `hciuart` is disabled |
 | `PermissionError` on `/dev/serial0` or `/dev/ttyAMA0` | The user is not in `dialout` | Run `sudo usermod -aG dialout lastra`, then log in again |
 | RAM usage grows over several days | A leak in Modbus/MQTT reconnection logic outside `dashboard.py` | Inspect retry loops in `main.py` and the shared state module |
+
+
+### People per machine (cycle dashboard)
+
+The statistics page shows PEOPLE PRESENT for LEFT and RIGHT. Publish a complete
+reading on the configured MQTT `people_topic` (default
+`factory/cutting-gutting/people_count`):
+
+```json
+{"left": 4, "right": 3}
+```
+
+Both values must be non-negative JSON integers. The system page uses their sum
+for PEOPLE and the total rate per worker. Missing or invalid readings are not
+assumed to be zero. The display shows `--` when no per-machine count is available.
+It can also read `people_count` (or the existing presence aliases) from each
+side's vision/gutting device. Legacy global payloads (`7`, `{"people_count": 7}`,
+`{"workers": 7}`) still work; a new global-only reading clears the previous MQTT
+per-machine breakdown. No equal split of a global total is inferred.
+
+
+### CP-IO22 presence inputs (4 workstations per machine)
+
+Source: https://www.comfilewiki.co.kr/ko/doku.php?id=comfilepi%3Acpio%3Acp-io22%3Aindex
+
+Use the board's GPIO-labelled INPUT terminals, in BCM numbering, not the
+physical header pin numbers:
+
+| Machine | Workstation 1 | Workstation 2 | Workstation 3 | Workstation 4 |
+|---|---|---|---|---|
+| LEFT | GPIO4 | GPIO5 | GPIO6 | GPIO7 |
+| RIGHT | GPIO8 | GPIO9 | GPIO10 | GPIO11 |
+
+GPIO12/13 are reserved for cutting motor feedback (still disabled); GPIO16
+is spare. GPIO17/18/19 remain CIP outputs. The old provisional GPIO20/21
+motor input assignments were corrected because these are CP-IO22 outputs.
+
+Each sensor must provide a maintained occupied/unoccupied signal, not a pulse
+for each passing person. The four stable occupied signals are summed (0–4).
+Inputs must remain stable for 100 ms; initial or missing readings show `--`.
+A failed input makes that side's count unknown; a GPIO failure invalidates both.
+`rpi.people_gpio` and `rpi.people_gpio_total` are published in the normal state.
+GPIO counts have priority over MQTT/manual counts in the cycle dashboard and
+the current shared total-people helper. MQTT does not overwrite GPIO readings.
+
+The initial configuration assumes HIGH = occupied (`pull_up: null`,
+`active_low: false`); verify empty/occupied at commissioning and invert
+`active_low` for any sensor whose logic is reversed. Disable SPI if it claims
+GPIO7–11, and ensure no overlay or other process owns GPIO4–11.
+
+Comfile specifies CP-IO22 for ComfilePi, not a bare Raspberry Pi. Verify the
+actual host/interface before wiring. Connect sensors through the CP-IO22's
+isolated field inputs and COM according to its wiring diagram (12–24 V nominal);
+do not connect field voltage directly to a Raspberry Pi GPIO header.
+
+
+### Pinout de debug : CP-IO22 et Raspberry Pi
+
+PINOUT DEBUG - CP-IO22 / GPIO BCM / RPi physique
+Les valeurs pin: ci-dessous sont des numeros BCM, PAS des broches physiques.
+IN/OUT = sens fixe sur le CP-IO22. La broche RPi est une correspondance
+logique avec J8 40 broches, PAS un schema de cablage direct CP-IO22/RPi.
+Reperer physiquement la broche 1 avant toute lecture du tableau.
+
+| I/O CP-IO22 | GPIO BCM (`pin:`) | Broche physique RPi J8 | Affectation |
+|---|---:|---:|---|
+| IN | 4 | 7 | Presence LEFT 1 |
+| IN | 5 | 29 | Presence LEFT 2 |
+| IN | 6 | 31 | Presence LEFT 3 |
+| IN | 7 | 26 | Presence LEFT 4 / SPI0 CE1 |
+| IN | 8 | 24 | Presence RIGHT 1 / SPI0 CE0 |
+| IN | 9 | 21 | Presence RIGHT 2 / SPI0 MISO |
+| IN | 10 | 19 | Presence RIGHT 3 / SPI0 MOSI |
+| IN | 11 | 23 | Presence RIGHT 4 / SPI0 SCLK |
+| IN | 12 | 32 | Cutting motors ON - reserve, desactive |
+| IN | 13 | 33 | Cutting motors TRIP - reserve, desactive |
+| IN | 16 | 36 | Libre |
+| OUT | 17 | 11 | CIP LEFT |
+| OUT | 18 | 12 | CIP CUTTING |
+| OUT | 19 | 35 | CIP RIGHT |
+| OUT | 20 | 38 | Libre |
+| OUT | 21 | 40 | Libre |
+| OUT | 22 | 15 | Libre |
+| OUT | 23 | 16 | Libre |
+| OUT | 24 | 18 | Libre |
+| OUT | 25 | 22 | Libre |
+| OUT | 26 | 37 | Libre |
+| OUT | 27 | 13 | Libre |
+
+```text
+        RPi : connecteur standard 40 broches (J8)
+        Signal gauche    Phys.   Phys.   Signal droite
+        3V3               1       2     5V
+        GPIO2 / SDA1      3       4     5V
+        GPIO3 / SCL1      5       6     GND
+        GPIO4             7       8     GPIO14 / TXD
+        GND               9      10     GPIO15 / RXD
+        GPIO17           11      12     GPIO18
+        GPIO27           13      14     GND
+        GPIO22           15      16     GPIO23
+        3V3              17      18     GPIO24
+        GPIO10 / MOSI    19      20     GND
+        GPIO9 / MISO     21      22     GPIO25
+        GPIO11 / SCLK    23      24     GPIO8 / CE0
+        GND              25      26     GPIO7 / CE1
+        GPIO0 / ID_SD    27      28     GPIO1 / ID_SC
+        GPIO5            29      30     GND
+        GPIO6            31      32     GPIO12
+        GPIO13           33      34     GND
+        GPIO19           35      36     GPIO16
+        GPIO26           37      38     GPIO20
+        GND              39      40     GPIO21
+```
+
+Debug : GPIO4 peut etre pris par 1-Wire ; GPIO7-11 par SPI0.
+GPIO14/15 (phys. 8/10) : UART /dev/serial0 du projet, hors I/O CP-IO22.
+GPIO0/1 (phys. 27/28) : identification HAT, a reserver.
+Presence : signal maintenu, HIGH=occupe, filtre 100 ms ; active_low inverse.
+Ne pas activer les entrees Cutting 12/13 avant verification du cablage.
+3V3 : phys. 1/17 ; 5V : phys. 2/4 ; GND : phys. 6/9/14/20/25/30/34/39.
+Les GPIO RPi sont en logique 3,3 V : jamais de 12/24 V sur J8.
+Le COM des entrees terrain CP-IO22 n'est pas a assimiler au GND de J8.
+Comfile destine le CP-IO22 au ComfilePi : verifier le modele/interface reel.
+Sources officielles :
+https://www.comfilewiki.co.kr/ko/doku.php?id=comfilepi%3Acpio%3Acp-io22%3Aindex
+https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#gpio
+
+Pour le diagnostic, suivre la chaine **capteur → entree CP-IO22 → GPIO BCM →
+cle `people_left_N` / `people_right_N` dans `rpi.gpio` → `rpi.people_gpio`
+→ compteur affiche**. Un signal instable ou une entree indisponible peut
+laisser le compteur a `--`. La commande `pinout` (si installee) affiche le
+connecteur du Raspberry Pi ; elle ne prouve pas le cablage du CP-IO22.
+
+
+### CIP durations: seconds in configuration and operator screens
+
+Ecava ON/OFF fields and all Pygame dashboards show **seconds (s)**.
+The CP-IO22 configuration uses `on_s` and `off_s`, for example:
+
+```yaml
+cip:
+  gutting_left: {pin: 17, active_high: true, enable: true, on_s: 2, off_s: 10}
+```
+
+Default durations: ON 2 s = 2000 ms; OFF 10 s = 10000 ms. Accepted range: 0.1–60 seconds,
+with up to three decimal places. Modbus CIP bounds use `min_s`/`max_s`
+in YAML; the loader converts these to native register units.
+The MQTT/Modbus protocol and GPIO scheduler retain integer milliseconds
+(`on_ms`/`off_ms`); Ecava converts on read/write. Do not send seconds under
+an `_ms` key. Legacy GPIO configuration with `_ms` is still readable, but
+do not specify both units for the same duration. Ejection timings remain ms.

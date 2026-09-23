@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--windowed", action="store_true")
-    parser.add_argument("--dashboard", choices=("1", "2", "old", "light", "cycle"), default="1")
+    parser.add_argument("--dashboard", choices=("1", "2", "old", "light", "cycle"), default="cycle")
     parser.add_argument("--no-mqtt", action="store_true")
     args = parser.parse_args()
 

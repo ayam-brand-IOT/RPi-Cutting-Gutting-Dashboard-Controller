@@ -150,6 +150,8 @@ class ProductivityMeter:
 
 def _people_count(snapshot, config):
     """Look up the configured counter, then common aliases."""
+    if "people_gpio" in snapshot.get("rpi", {}):
+        return snapshot["rpi"].get("people_gpio_total")
     device_name = config.get("people_device")
     key = config.get("people_key", "people_count")
     if device_name:
@@ -274,9 +276,9 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
                   ("DAILY TOTAL", str(total), "fish", CYAN),
                   ("GOOD", f"{100.0 * stats['good'] / total if total else 0.0:.1f}%",
                    f"{stats['good']} fish", GREEN),
-                  ("BAD", f"{100.0 * stats['bad'] / total if total else 0.0:.1f}%",
+                  ("REJECTED", f"{100.0 * stats['bad'] / total if total else 0.0:.1f}%",
                    f"{stats['bad']} fish", RED if stats["bad"] else MUTED),
-                  ("BELLY", f"{100.0 * stats['belly'] / total if total else 0.0:.1f}%",
+                  ("WRONG SIDE", f"{100.0 * stats['belly'] / total if total else 0.0:.1f}%",
                    f"{stats['belly']} fish", AMBER))
     for index, (label, value, subtitle, stat_color) in enumerate(stat_items):
         cx = rect.x + 10 + int((rect.w - 20) * (index + 0.5) / 5)
@@ -297,7 +299,11 @@ def _machine_card(screen, rect, title, device, productivity, history, stats):
         values.get("rpm_wheel2", 0)),
         (rect.right - 14, status_y), 14, MUTED, False, "midright")
 
-    graph = pygame.Rect(rect.x + 13, rect.y + 140, rect.w - 26, rect.h - 150)
+    belt_rpm = values.get("rpm_belt", "--") if online else "--"
+    _text(screen, f"BELT RPM  {belt_rpm}",
+          (rect.x + 16, rect.y + 145), 14, BLUE, True, "midleft")
+
+    graph = pygame.Rect(rect.x + 13, rect.y + 162, rect.w - 26, rect.h - 172)
     if graph.h >= 20:
         _sparkline(screen, graph, history, BLUE)
 
@@ -314,6 +320,9 @@ def _status_light(screen, center, label, active, available=True, fault=False):
 
 
 def _cip_card(screen, rect, title, item):
+    # State durations are milliseconds; display seconds.
+    on_s = '--' if item.get('on_ms') is None else f"{item['on_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
+    off_s = '--' if item.get('off_ms') is None else f"{item['off_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
     enabled = bool(item.get("enable"))
     output = bool(item.get("output"))
     _panel(screen, rect, (15, 31, 45) if output else PANEL_2,
@@ -324,7 +333,7 @@ def _cip_card(screen, rect, title, item):
     _pill(screen, pygame.Rect(rect.right - 90, rect.y + 6, 80, 26),
           "ACTIVE" if output else ("READY" if enabled else "OFF"),
           active=enabled or output)
-    _text(screen, f"ON {item.get('on_ms', '--')} ms  /  OFF {item.get('off_ms', '--')} ms",
+    _text(screen, f"ON {on_s} s  /  OFF {off_s} s",
           (rect.x + 32, rect.bottom - 7), 14, MUTED, False, "bottomleft")
 
 
@@ -604,14 +613,14 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
                       ("Daily total", total, "fish today", CYAN, False),
                       ("People", people, "", CYAN, False),
                       ("Good", good, "good fish", GREEN, False),
-                      ("Bad", bad, "vision ejections", RED if bad else AMBER, False),
-                      ("Belly", belly, "orientation ejections", AMBER, False))
+                      ("Rejected", bad, "vision ejections", RED if bad else AMBER, False),
+                      ("Wrong side", belly, "orientation ejections", AMBER, False))
             x = margin
             for width, item in zip(widths, titles):
                 rect = pygame.Rect(x, kpi_y, width, kpi_h)
                 if item[0] == "People":
                     _people_kpi(screen, rect, people, cadence_worker)
-                elif item[0] in ("Good", "Bad", "Belly"):
+                elif item[0] in ("Good", "Rejected", "Wrong side"):
                     _quality_kpi(screen, rect, item[0], item[1], total, item[3])
                 else:
                     _kpi(screen, rect, *item)
