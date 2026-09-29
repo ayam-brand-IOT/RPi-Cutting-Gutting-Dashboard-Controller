@@ -749,3 +749,22 @@ The MQTT/Modbus protocol and GPIO scheduler retain integer milliseconds
 (`on_ms`/`off_ms`); Ecava converts on read/write. Do not send seconds under
 an `_ms` key. Legacy GPIO configuration with `_ms` is still readable, but
 do not specify both units for the same duration. Ejection timings remain ms.
+
+
+### Productivity target (Operation)
+
+Ecava Machine Control exposes a common LEFT/RIGHT target in **fish/min** under
+Production schedule. Apply an integer from 0 to 10000; **0 hides the line**
+(default). This is a visual production goal, not a motor/VFD speed command.
+The RPi stores it in `runtime_settings.json` and publishes
+`rpi.productivity_setpoint` in the existing SCADA JSON state. Both Operation
+speed graphs show an orange target line; their shared scale includes the target.
+The existing SCADA command JSON accepts:
+`{"target":"system","device":"rpi","parameters":{"productivity_setpoint":250}}`.
+Deploy both the RPi Python changes and the updated Ecava HTML to use this setting.
+
+If a side stays strictly below the productivity target for more than 60 continuous
+seconds, its Operation productivity number blinks red once per second. Monitoring
+continues on Maintenance. Reaching the target, disabling/changing the target,
+resetting counters, or losing that side's vision connection resets the timer.
+Each side is monitored independently.

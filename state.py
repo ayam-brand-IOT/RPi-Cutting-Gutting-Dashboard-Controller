@@ -16,6 +16,7 @@ class StateStore:
         runtime = {
             "breaks": list(default_breaks or ["09:00", "12:00", "15:00", "18:00"]),
             "counter_offsets": {},
+            "productivity_setpoint": 0,
             "reset_sequence": 0,
             "reset_at": None,
         }
@@ -46,7 +47,7 @@ class StateStore:
             return
         payload = {
             key: copy.deepcopy(self._data["rpi"].get(key))
-            for key in ("breaks", "counter_offsets", "reset_sequence", "reset_at")
+            for key in ("breaks", "counter_offsets", "reset_sequence", "reset_at", "productivity_setpoint")
         }
         self._settings_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self._settings_path.with_suffix(self._settings_path.suffix + ".tmp")
@@ -122,6 +123,20 @@ class StateStore:
         with self._lock:
             self._data["rpi"]["people_by_machine"] = counts
             self._data["rpi"]["people_count"] = left + right
+            self._data["timestamp"] = time.time()
+
+    def update_productivity_setpoint(self, value):
+        """Shared visual target in fish/min; zero hides the target line."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 10000 or int(value) != value:
+            raise ValueError("productivity_setpoint: integer from 0 to 10000 fish/min required")
+        with self._lock:
+            previous = self._data["rpi"]["productivity_setpoint"]
+            self._data["rpi"]["productivity_setpoint"] = int(value)
+            try:
+                self._save_runtime()
+            except Exception:
+                self._data["rpi"]["productivity_setpoint"] = previous
+                raise
             self._data["timestamp"] = time.time()
 
     def update_breaks(self, breaks):

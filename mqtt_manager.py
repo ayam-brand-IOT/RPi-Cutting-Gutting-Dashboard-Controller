@@ -273,9 +273,12 @@ class MQTTManager(threading.Thread):
             elif target == "system":
                 if device_name not in ("rpi", "system"):
                     raise ValueError("device system doit être rpi")
-                unknown = set(parameters) - {"breaks", "reset_data"}
+                unknown = set(parameters) - {"breaks", "reset_data", "productivity_setpoint"}
                 if unknown:
                     raise ValueError(f"paramètre système inconnu: {sorted(unknown)[0]}")
+                if "productivity_setpoint" in parameters:
+                    self.state.update_productivity_setpoint(parameters["productivity_setpoint"])
+                    accepted["productivity_setpoint"] = int(parameters["productivity_setpoint"])
                 if "breaks" in parameters:
                     breaks = parameters["breaks"]
                     if not isinstance(breaks, list) or len(breaks) != 4:

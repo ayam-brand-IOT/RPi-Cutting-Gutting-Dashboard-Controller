@@ -52,6 +52,14 @@
     </article>
   </section>
 
+  <section class="grid" aria-label="Production target" style="margin-top:15px">
+    <article class="card" style="grid-column:1/-1">
+      <div class="card-head"><h3>Productivity target — LEFT / RIGHT</h3><span class="badge">ORANGE GRAPH LINE</span></div>
+      <div id="productivityTarget"></div>
+      <p style="color:var(--muted);font-size:13px">Common target for both machines, saved on the Raspberry Pi. 0 hides the target line.</p>
+    </article>
+  </section>
+
   <div class="section-title"><h2>Machine status</h2><span>Updated every second</span></div>
   <section class="grid">
     <article class="card wide" id="machine-left">
@@ -133,6 +141,7 @@ function consumeState(state){
   var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
   if(!state||typeof state!=='object')throw new Error('Invalid JSON state');
   offsets=state.rpi&&state.rpi.counter_offsets?state.rpi.counter_offsets:{};
+  latest.productivity_setpoint_actual=state.rpi&&state.rpi.productivity_setpoint!==undefined?state.rpi.productivity_setpoint:null;
   for(i=0;i<deviceNames.length;i++){
     name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;
     latest[name+'_connected']=d.connected?1:0;
@@ -181,6 +190,10 @@ function readAllTags(){
 }
 
 function commandFromKey(key,value){
+  if(key==='productivity_setpoint_cmd'){
+    if(typeof value!=='number'||!isFinite(value)||value<0||value>10000||Math.floor(value)!==value)throw new Error('Target: integer from 0 to 10000 fish/min required');
+    return {target:'system',device:'rpi',parameters:{productivity_setpoint:value}};
+  }
   var match,side,parameter,device;
   match=/^cip_(left|cutting|right)_(enable|on|off)_cmd$/.exec(key);
   if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');if(parameter!=='enable')value=cipMilliseconds(value);return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
@@ -255,6 +268,7 @@ function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
   return '<div class="setting"><label>'+esc(label)+info+'</label><span class="actual" data-value="'+actualKey+'">-- <small>'+esc(unit||'')+'</small></span><span class="control">'+input+'<button class="apply" data-apply="'+cmdKey+'" data-min="'+(min===undefined?'':min)+'" data-max="'+(max===undefined?'':max)+'">✓</button></span></div>';
 }
 function build(){
+  document.getElementById('productivityTarget').innerHTML=settingHtml('Target','productivity_setpoint_actual','productivity_setpoint_cmd',0,10000,'fish/min',false);
   var cip=document.getElementById('cipCards'),html='',i,c,p;
   for(i=0;i<CIP.length;i++){c=CIP[i];html+='<article class="card"><div class="card-head"><h3>'+esc(c.name)+'</h3><span class="badge" data-enabled="'+c.enableA+'">DISABLED</span></div><div class="cip-state"><i class="lamp" data-led="'+c.output+'"></i><span>Solenoid valve output</span></div>'+settingHtml('Activation',c.enableA,c.enableC,0,1,'',true)+settingHtml('ON time (seconds)',c.onA,c.onC,0.1,60,'s',false)+settingHtml('OFF time (seconds)',c.offA,c.offC,0.1,60,'s',false)+'</article>'}
   cip.innerHTML=html;

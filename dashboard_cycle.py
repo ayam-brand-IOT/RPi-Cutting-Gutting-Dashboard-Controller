@@ -85,6 +85,46 @@ def _belt_rpm(device):
     return '--' if not device.get('connected') or value is None else str(value)
 
 
+
+def _productivity_direction(rate, history):
+    """Compare with ~30 s ago (history samples every 2 s); ±10% is stable."""
+    if len(history) < 16:
+        return None
+    previous = history[-16]
+    delta = rate - previous
+    threshold = previous * 0.10
+    if math.isclose(abs(delta), threshold, rel_tol=1e-9, abs_tol=1e-9):
+        return 0
+    return 1 if delta > threshold else -1 if delta < -threshold else 0
+
+
+def _productivity_indicator(screen, position, rate, history):
+    direction = _productivity_direction(rate, history)
+    x, y = position
+    if direction in (None, 0):
+        _text(screen, '--' if direction is None else '=', position, 32, MUTED,
+              True, 'center')
+    else:
+        # Draw triangles directly so the symbol does not depend on font support.
+        points = [(x, y - 12 * direction), (x - 13, y + 10 * direction),
+                  (x + 13, y + 10 * direction)]
+        pygame.draw.polygon(screen, GREEN if direction > 0 else RED, points)
+
+
+def _productivity_alarm(meter, rate, target, now, reset_sequence=0, online=True):
+    """Track continuous time below target, independently for each meter."""
+    context = (target, reset_sequence)
+    if getattr(meter, '_target_context', None) != context:
+        meter._target_context = context
+        meter._below_target_since = None
+    if not online or not target or not math.isfinite(rate) or rate >= target:
+        meter._below_target_since = None
+        return False
+    if meter._below_target_since is None:
+        meter._below_target_since = now
+    return now - meter._below_target_since > 60.0
+
+
 def _statistics(screen, snapshot, config, devices, left, right):
     _panel(screen, pygame.Rect(16, 82, 1248, 592))
     for x, side in ((310, 'left'), (970, 'right')):
@@ -95,13 +135,24 @@ def _statistics(screen, snapshot, config, devices, left, right):
         _text(screen, unit, (640, y + 17), 15, MUTED, anchor='center')
     for x, item in ((310, left), (970, right)):
         _text(screen, _number(item['total']), (x, 194), 44, CYAN, True, 'center', max_width=450)
-        _text(screen, f"{item['rate']:.1f}", (x, 280), 54, BLUE, True, 'center', max_width=450)
+        if item.get('productivity_visible', True):
+            _text(screen, f"{item['rate']:.1f}", (x, 280), 54,
+                  RED if item.get('productivity_alarm') else BLUE, True, 'center', max_width=280)
+        _productivity_indicator(screen, (x - 175 if x < 640 else x + 175, 280),
+                                item['rate'], item['history'])
     history = left['history'] + right['history']
-    ceiling = max(1.0, max(history, default=1.0) * 1.12)
+    target = snapshot.get('rpi', {}).get('productivity_setpoint', 0)
+    target = target if isinstance(target, (int, float)) and math.isfinite(target) and 0 < target <= 10000 else 0
+    ceiling = max(1.0, max(max(history, default=1.0), target) * 1.12)
     _text(screen, 'SPEED TRACK', (640, 399), 16, MUTED, True, 'center')
     _text(screen, f"0–{ceiling:.0f} fish/min", (640, 429), 15, MUTED, anchor='center')
     for x, item in ((46, left), (706, right)):
         _trend(screen, pygame.Rect(x, 350, 528, 130), item['history'], ceiling)
+        if target:
+            y = 480 - 6 - round((130 - 12) * target / ceiling)
+            pygame.draw.line(screen, AMBER, (x + 6, y), (x + 522, y), 2)
+            _text(screen, f"TARGET {target:g} fish/min", (x + 528, 336), 16,
+                  AMBER, True, 'midright')
     for y, key, label, accent in ((518, 'bad', 'REJECTED / VISION', RED), (576, 'belly', 'WRONG SIDE', AMBER)):
         _text(screen, label, (640, y), 17, MUTED, True, 'center')
         for x, item in ((310, left), (970, right)):
@@ -192,6 +243,18 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right, ela
     # Update both meters on every frame, including during the system page.
     left = _side(snapshot, 'left', rate_left)
     right = _side(snapshot, 'right', rate_right)
+    # Keep monitoring during Maintenance as well as Operation.
+    now = time.monotonic()
+    rpi = snapshot.get('rpi', {})
+    target = rpi.get('productivity_setpoint', 0)
+    target = target if isinstance(target, (int, float)) and math.isfinite(target) and 0 < target <= 10000 else 0
+    for side, item, meter in (('left', left, rate_left), ('right', right, rate_right)):
+        alarm = _productivity_alarm(meter, item['rate'], target, now,
+                                    rpi.get('reset_sequence', 0),
+                                    bool(_device(snapshot, 'vision_' + side).get('connected')))
+        item['productivity_alarm'] = alarm
+        # One blink per second, red for half a second then hidden.
+        item['productivity_visible'] = not alarm or int(now * 2) % 2 == 0
     page, remaining = page_at(elapsed)
     _header(screen, snapshot, page, remaining)
     if page == 'statistics':
