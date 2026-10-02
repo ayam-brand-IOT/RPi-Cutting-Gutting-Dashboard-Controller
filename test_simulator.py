@@ -4,10 +4,28 @@ import unittest
 from pathlib import Path
 
 from config_loader import load_config
-from simulator import ModbusSimulator
+from simulator import ModbusSimulator, make_cip_simulator
 
 
 class SimulatorTests(unittest.TestCase):
+    def test_water_intake_cycle_and_state(self):
+        cfg = load_config("config.yaml")
+        manager = make_cip_simulator(cfg["gpio"])
+        self.assertEqual(len(manager.channels), 4)
+        self.assertEqual(manager.channels["water_intake"]["pin"], 20)
+        manager._run_cycles(10.0)
+        self.assertTrue(manager.outputs[20].value)
+        manager._run_cycles(12.0)
+        self.assertFalse(manager.outputs[20].value)
+        manager._run_cycles(22.0)
+        self.assertTrue(manager.outputs[20].value)
+        manager.enqueue_cip("water_intake", {"enable": False})
+        manager._apply_commands(22.1)
+        manager._publish_state(22.1)
+        self.assertFalse(manager.outputs[20].value)
+        self.assertEqual(manager.state.snapshot()["rpi"]["cip"]["water_intake"]["phase"], "disabled")
+        self.assertTrue(manager.outputs[17].value)
+
     def test_gutting_coils_are_not_holding_registers(self):
         cfg = load_config("config.yaml")
         for name in ("gutting_left", "gutting_right"):

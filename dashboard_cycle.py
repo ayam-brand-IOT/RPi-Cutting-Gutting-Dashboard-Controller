@@ -228,17 +228,17 @@ def _system(screen, snapshot, config, devices, left, right):
             _text(screen, period, (cx, 468), 15, MUTED, True, 'center')
             _text(screen, f"{'--' if value is None else value} {unit}", (cx, 507), 26, accent if online else MUTED, True, 'center', max_width=185)
     cip = rpi.get('cip', {})
-    for i, (name, label) in enumerate((('gutting_left', 'LEFT'), ('cutting', 'CUTTING'), ('gutting_right', 'RIGHT'))):
-        x = 16 + i * 420
+    for i, (name, label) in enumerate((('gutting_left', 'LEFT'), ('cutting', 'CUTTING'), ('gutting_right', 'RIGHT'), ('water_intake', 'Water Intake'))):
+        x = 16 + i * 315
         item = cip.get(name, {})
         active, enabled = bool(item.get('output')), bool(item.get('enable'))
-        _panel(screen, pygame.Rect(x, 552, 408, 122), PANEL, GREEN if active else LINE)
-        _text(screen, 'CIP / ' + label, (x + 20, 564), 21, TEXT, True)
-        _text(screen, 'ACTIVE' if active else 'READY' if enabled else 'OFF', (x + 388, 576), 18, GREEN if active else MUTED, True, 'midright')
-        for cx, key, period in ((x + 104, 'on_ms', 'ON'), (x + 304, 'off_ms', 'OFF')):
+        _panel(screen, pygame.Rect(x, 552, 303, 122), PANEL, GREEN if active else LINE)
+        _text(screen, 'CIP / ' + label, (x + 16, 564), 18, TEXT, True)
+        _text(screen, 'ACTIVE' if active else 'READY' if enabled else 'OFF', (x + 287, 594), 18, GREEN if active else MUTED, True, 'midright')
+        for cx, key, period in ((x + 76, 'on_ms', 'ON'), (x + 227, 'off_ms', 'OFF')):
             _text(screen, period, (cx, 611), 15, MUTED, True, 'center')
             seconds = '--' if item.get(key) is None else f"{item[key] / 1000:.3f}".rstrip('0').rstrip('.')
-            _text(screen, f"{seconds} s", (cx, 646), 26, TEXT, True, 'center', max_width=180)
+            _text(screen, f"{seconds} s", (cx, 646), 26, TEXT, True, 'center', max_width=135)
 
 
 def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right, elapsed=0):

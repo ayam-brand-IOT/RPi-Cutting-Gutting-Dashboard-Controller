@@ -134,7 +134,8 @@ var COMMAND_TAG = 'machine_command_json';
 var CIP = [
   {id:'left',name:'Left gutting',enableA:'cip_left_enable_actual',onA:'cip_left_on_actual',offA:'cip_left_off_actual',output:'cip_left_output',enableC:'cip_left_enable_cmd',onC:'cip_left_on_cmd',offC:'cip_left_off_cmd'},
   {id:'cutting',name:'Cutting machine',enableA:'cip_cutting_enable_actual',onA:'cip_cutting_on_actual',offA:'cip_cutting_off_actual',output:'cip_cutting_output',enableC:'cip_cutting_enable_cmd',onC:'cip_cutting_on_cmd',offC:'cip_cutting_off_cmd'},
-  {id:'right',name:'Right gutting',enableA:'cip_right_enable_actual',onA:'cip_right_on_actual',offA:'cip_right_off_actual',output:'cip_right_output',enableC:'cip_right_enable_cmd',onC:'cip_right_on_cmd',offC:'cip_right_off_cmd'}
+  {id:'right',name:'Right gutting',enableA:'cip_right_enable_actual',onA:'cip_right_on_actual',offA:'cip_right_off_actual',output:'cip_right_output',enableC:'cip_right_enable_cmd',onC:'cip_right_on_cmd',offC:'cip_right_off_cmd'},
+  {id:'water_intake',name:'Water Intake',enableA:'cip_water_intake_enable_actual',onA:'cip_water_intake_on_actual',offA:'cip_water_intake_off_actual',output:'cip_water_intake_output',enableC:'cip_water_intake_enable_cmd',onC:'cip_water_intake_on_cmd',offC:'cip_water_intake_off_cmd'}
 ];
 var PARAMS = [
   {key:'eject_delay',label:'Ejection delay',unit:'ms',min:0,max:9999}, {key:'eject_duration',label:'Ejection duration',unit:'ms',min:10,max:5000}, {key:'eject_enable',label:'Ejector enabled',bool:true},
@@ -184,7 +185,7 @@ function consumeState(state){
       latest[name+'_'+p+'_actual']=d.parameters[key];
     }
   }
-  cipMap={gutting_left:'left',cutting:'cutting',gutting_right:'right'};
+  cipMap={gutting_left:'left',cutting:'cutting',gutting_right:'right',water_intake:'water_intake'};
   for(name in cipMap){
     if(!Object.prototype.hasOwnProperty.call(cipMap,name))continue;
     cip=state.rpi&&state.rpi.cip&&state.rpi.cip[name];if(!cip)continue;
@@ -220,8 +221,8 @@ function commandFromKey(key,value){
     return {target:'system',device:'rpi',parameters:{productivity_setpoint:value}};
   }
   var match,side,parameter,device;
-  match=/^cip_(left|cutting|right)_(enable|on|off)_cmd$/.exec(key);
-  if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':'cutting');parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');if(parameter!=='enable')value=cipMilliseconds(value);return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
+  match=/^cip_(left|cutting|right|water_intake)_(enable|on|off)_cmd$/.exec(key);
+  if(match){side=match[1];device=side==='left'?'gutting_left':(side==='right'?'gutting_right':side);parameter=match[2]==='on'?'on_ms':(match[2]==='off'?'off_ms':'enable');if(parameter!=='enable')value=cipMilliseconds(value);return {target:'cip',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
   match=/^(gutting_left|gutting_right|vision_left|vision_right)_(.+)_cmd$/.exec(key);
   if(match){device=match[1];parameter=match[2];if(parameter==='eject_delay')parameter='eject_delay_ms';if(parameter==='eject_duration')parameter='eject_duration_ms';return {target:'modbus',device:device,parameters:(function(){var x={};x[parameter]=value;return x}())}}
   throw new Error('Unknown command: '+key);
@@ -272,7 +273,7 @@ function writeCommand(key,value,min,max){
     console.log('JSON command:',JSON.stringify(command));
     console.log('Base64 command:',payload);
     setTag(COMMAND_TAG,payload);
-    toast('Command sent: '+value+(/^cip_(left|cutting|right)_(on|off)_cmd$/.test(key)?' s':''),false);
+    toast('Command sent: '+value+(/^cip_(left|cutting|right|water_intake)_(on|off)_cmd$/.test(key)?' s':''),false);
   }catch(error){
     console.error('writeCommand error:',error);
     toast('Command failed: '+error.message,true);

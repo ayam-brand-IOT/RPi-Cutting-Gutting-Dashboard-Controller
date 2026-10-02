@@ -5,7 +5,7 @@ a = Analysis(
     ['simulator.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/simulator-icon.ico', 'assets')],
+    datas=[('assets/simulator-icon.ico', 'assets')] if __import__('pathlib').Path('assets/simulator-icon.ico').exists() else [],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/simulator-icon.ico'],
+    icon=['assets/simulator-icon.ico'] if __import__('pathlib').Path('assets/simulator-icon.ico').exists() else None,
 )

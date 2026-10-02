@@ -85,6 +85,13 @@ def main():
     }).encode())
     assert gpio.command == ("cutting", {"enable": 1, "on_ms": 700})
     manager._on_scada_json(json.dumps({
+        "target": "cip", "device": "water_intake",
+        "parameters": {"enable": 1, "on_ms": 2000, "off_ms": 10000},
+    }).encode())
+    assert gpio.command == ("water_intake", {"enable": 1, "on_ms": 2000, "off_ms": 10000})
+    manager._on_cip_message("water_intake", types.SimpleNamespace(payload=b'{"enable":false}'))
+    assert gpio.command == ("water_intake", {"enable": False})
+    manager._on_scada_json(json.dumps({
         "machine_command_json": json.dumps({
             "target": "modbus", "device": "gutting_left",
             "parameters": {"eject_enable": 0},

@@ -24,6 +24,7 @@ from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext
 from pymodbus.server import ModbusSerialServer
 
 import sys
+import time
 from pathlib import Path
 
 # Compatibilité pymodbus selon version
@@ -39,6 +40,20 @@ if not hasattr(_DeviceCtx, "getValues"):
     )
 
 from config_loader import load_config
+from gpio_manager import GPIOManager
+from state import StateStore
+
+
+class SimulatedOutput:
+    value = False
+
+
+def make_cip_simulator(config):
+    """Use the controller's cycle logic with local outputs, without GPIO IO."""
+    manager = GPIOManager(config, StateStore([]), threading.Event())
+    manager.outputs = {channel['pin']: SimulatedOutput()
+                       for channel in manager.channels.values()}
+    return manager
 
 # Appareils câblés en réel : exclus du simulateur (ni slave, ni onglet).
 # main.py doit être branché sur le vrai port RS485 pour les atteindre.
@@ -232,6 +247,55 @@ def build_gui():
     # --- Onglets par appareil ---
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True, padx=8, pady=8)
+
+    cip_sim = make_cip_simulator(cfg.get('gpio', {}))
+    cip_tab = ttk.Frame(notebook, padding=10)
+    notebook.add(cip_tab, text='CP-IO22 / CIP')
+    ttk.Label(cip_tab, text='Local GPIO simulation — no physical outputs or MQTT publishing').grid(
+        row=0, column=0, columnspan=5, sticky='w', pady=(0, 10))
+    for column, title in enumerate(('Channel / BCM GPIO', 'Enabled', 'ON (s)', 'OFF (s)', 'Output')):
+        ttk.Label(cip_tab, text=title).grid(row=1, column=column, padx=8)
+    cip_indicators = {}
+    labels = {'gutting_left': 'Left gutting', 'cutting': 'Cutting machine',
+              'gutting_right': 'Right gutting', 'water_intake': 'Water Intake'}
+    for row, (name, channel) in enumerate(cip_sim.channels.items(), start=2):
+        ttk.Label(cip_tab, text=f"{labels.get(name, name)} / GPIO{channel['pin']}").grid(
+            row=row, column=0, sticky='w', padx=8, pady=8)
+        enabled = tk.BooleanVar(value=channel['enable'])
+        on_s = tk.StringVar(value=str(channel['on_ms'] / 1000))
+        off_s = tk.StringVar(value=str(channel['off_ms'] / 1000))
+        ttk.Checkbutton(cip_tab, variable=enabled).grid(row=row, column=1)
+        for column, var in ((2, on_s), (3, off_s)):
+            ttk.Spinbox(cip_tab, from_=0.1, to=60, increment=0.1,
+                        textvariable=var, width=8).grid(row=row, column=column, padx=8)
+        indicator = tk.StringVar(value='OFF')
+        cip_indicators[name] = indicator
+        ttk.Label(cip_tab, textvariable=indicator, width=9).grid(row=row, column=4)
+
+        def apply_cip(n=name, e=enabled, on=on_s, off=off_s):
+            try:
+                values = {'enable': e.get()}
+                for key, var in (('on_ms', on), ('off_ms', off)):
+                    seconds = float(var.get())
+                    if not 0.1 <= seconds <= 60 or abs(seconds * 1000 - round(seconds * 1000)) > 0.000001:
+                        raise ValueError('CIP: 0.1 to 60 seconds, step 0.001 s')
+                    values[key] = round(seconds * 1000)
+                cip_sim.enqueue_cip(n, values)
+            except Exception as exc:
+                messagebox.showerror('CIP settings', str(exc))
+
+        ttk.Button(cip_tab, text='Apply', command=apply_cip).grid(row=row, column=5, padx=8)
+
+    def refresh_cip():
+        now = time.monotonic()
+        cip_sim._apply_commands(now)
+        cip_sim._run_cycles(now)
+        for name, channel in cip_sim.channels.items():
+            cip_indicators[name].set('ON' if channel['output'] else
+                                     'OFF' if channel['enable'] else 'DISABLED')
+        root.after(50, refresh_cip)
+
+    root.after(50, refresh_cip)
 
     def add_section_header(parent, row, text) -> int:
         ttk.Separator(parent, orient="horizontal").grid(

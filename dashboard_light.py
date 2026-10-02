@@ -146,14 +146,14 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
     _label(screen, safety, (222, 638), 15, RED if gpio.get('cutting_motors_trip') else MUTED, anchor='midleft')
     _label(screen, 'RPM: blade / wheel 1 / wheel 2', (24, 681), 14, MUTED)
     cip = rpi.get('cip', {})
-    for y, name, label in ((563, 'gutting_left', 'Left'), (613, 'cutting', 'Cutting'), (663, 'gutting_right', 'Right')):
+    for y, name, label in ((557, 'gutting_left', 'Left'), (597, 'cutting', 'Cutting'), (637, 'gutting_right', 'Right'), (677, 'water_intake', 'Water Intake')):
         item = cip.get(name, {})
         active, enabled = bool(item.get('output')), bool(item.get('enable'))
-        _label(screen, label, (444, y), 17, TEXT, anchor='midleft')
-        _status(screen, 531, y, 'ACTIVE' if active else ('READY' if enabled else 'OFF'), GREEN if active else (PURPLE if enabled else MUTED))
+        _label(screen, label, (444, y), 14, TEXT, anchor='midleft')
+        _status(screen, 566, y, 'ACTIVE' if active else ('READY' if enabled else 'OFF'), GREEN if active else (PURPLE if enabled else MUTED))
         on_s = '--' if item.get('on_ms') is None else f"{item['on_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
         off_s = '--' if item.get('off_ms') is None else f"{item['off_ms'] / 1000:.3f}".rstrip('0').rstrip('.')
-        _label(screen, f"ON {on_s} s / OFF {off_s} s", (836, y), 14, MUTED, anchor='midright', width=206)
+        _label(screen, f"ON {on_s} s / OFF {off_s} s", (836, y), 14, MUTED, anchor='midright', width=190)
     for y, name, label, keys, unit in ((563, 'electricity_meter', 'Electricity', ('energy_today_kwh', 'energy_month_kwh'), 'kWh'), (637, 'water_meter', 'Water', ('water_today_m3', 'water_month_m3'), 'm³')):
         device = _device(snapshot, name)
         online = bool(device.get('connected'))

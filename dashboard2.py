@@ -168,8 +168,8 @@ def draw_dashboard(screen, snapshot, config, devices, rate_left, rate_right):
     _text(screen, safety, (1246, 442), 14, RED if gpio.get("cutting_motors_trip") else MUTED, anchor="midright")
     _utilities(screen, snapshot)
     cip = rpi.get("cip", {})
-    for index, (name, label) in enumerate((("gutting_left", "CIP / LEFT"), ("cutting", "CIP / CUTTING"), ("gutting_right", "CIP / RIGHT"))):
-        _cip_card(screen, pygame.Rect(16 + index * 420, 628, 408, 76), label, cip.get(name, {}))
+    for index, (name, label) in enumerate((("gutting_left", "CIP / LEFT"), ("cutting", "CIP / CUTTING"), ("gutting_right", "CIP / RIGHT"), ("water_intake", "Water Intake"))):
+        _cip_card(screen, pygame.Rect(16 + index * 315, 628, 303, 76), label, cip.get(name, {}))
 
 
 def _trend(screen, rect, history, ceiling):

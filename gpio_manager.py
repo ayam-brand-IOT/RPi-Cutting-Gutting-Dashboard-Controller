@@ -13,7 +13,7 @@ except ImportError:
 
 
 class GPIOManager(threading.Thread):
-    """Pilote les GPIO du CP-IO22 et les trois cycles CIP sans blocage."""
+    """Pilote les GPIO du CP-IO22 et les cycles CIP sans blocage."""
 
     def __init__(self, config: dict, state, stop_event: threading.Event):
         super().__init__(name="gpio-cip", daemon=True)
@@ -190,7 +190,8 @@ class GPIOManager(threading.Thread):
     def run(self):
         try:
             self._setup()
-            print("[GPIO] CP-IO22 ONLINE via gpiozero — CIP sur GPIO17/18/19", flush=True)
+            pins = "/".join(str(channel["pin"]) for channel in self.channels.values())
+            print(f"[GPIO] CP-IO22 ONLINE via gpiozero — CIP sur GPIO{pins}", flush=True)
             while not self.stop_event.is_set():
                 now = time.monotonic()
                 self._apply_commands(now)

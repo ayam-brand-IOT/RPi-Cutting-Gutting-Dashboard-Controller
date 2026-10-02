@@ -548,9 +548,9 @@ sudo systemctl status dashboard.service
 
 #### Displayed information and screenshots
 
-The English dashboard emphasizes operator KPIs: fish/minute, people present, Good, Bad and Belly ejections. Each gutting machine has a rolling productivity graph. Motor trips trigger a red banner, while RPM remains visible in the machine cards. The compact CIP area shows only the three Raspberry Pi / CP-IO22 outputs. Water and electricity appear at the bottom with icons and daily/monthly consumption.
+The English dashboard emphasizes operator KPIs: fish/minute, people present, Good, Bad and Belly ejections. Each gutting machine has a rolling productivity graph. Motor trips trigger a red banner, while RPM remains visible in the machine cards. The compact CIP area shows only the four Raspberry Pi / CP-IO22 outputs. Water and electricity appear at the bottom with icons and daily/monthly consumption.
 
-Cutting machine feedback provisionally uses CP-IO22 inputs BCM20 (`cutting_motors_on`) and BCM21 (`cutting_motors_trip`), active HIGH. Its status appears near CIP, and a cutting motor trip immediately enters the global red alarm banner. Match the pins and polarity to the actual wiring.
+Cutting machine feedback reserves CP-IO22 inputs BCM12 (`cutting_motors_on`) and BCM13 (`cutting_motors_trip`), disabled until wired. BCM20 is the Water Intake CIP output. Its status appears near CIP, and a cutting motor trip immediately enters the global red alarm banner. Match the pins and polarity to the actual wiring.
 
 Throughput is calculated from changes in `fish_counter` over `dashboard.productivity_window_s`. To display staffing from Modbus, add `people_count` to the chosen device's `input_registers`, then configure `dashboard.people_device` and `dashboard.people_key`.
 
@@ -664,7 +664,7 @@ physical header pin numbers:
 | RIGHT | GPIO8 | GPIO9 | GPIO10 | GPIO11 |
 
 GPIO12/13 are reserved for cutting motor feedback (still disabled); GPIO16
-is spare. GPIO17/18/19 remain CIP outputs. The old provisional GPIO20/21
+is spare. GPIO17/18/19/20 are CIP outputs. The old provisional GPIO20/21
 motor input assignments were corrected because these are CP-IO22 outputs.
 
 Each sensor must provide a maintained occupied/unoccupied signal, not a pulse
@@ -710,7 +710,7 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 | OUT | 17 | 11 | CIP LEFT |
 | OUT | 18 | 12 | CIP CUTTING |
 | OUT | 19 | 35 | CIP RIGHT |
-| OUT | 20 | 38 | Libre |
+| OUT | 20 | 38 | CIP Water Intake |
 | OUT | 21 | 40 | Libre |
 | OUT | 22 | 15 | Libre |
 | OUT | 23 | 16 | Libre |
@@ -891,3 +891,11 @@ Copy-Item config.yaml dist\config.yaml
 Keep the editable YAML beside `dist\simulator.exe`. Invalid register entries
 report their YAML path at load time. The `coils` map belongs directly under
 the device, alongside `holding_registers`, not inside it.
+
+### Water Intake CIP
+
+Water Intake (water admission) uses CP-IO22 **BCM GPIO20**, physical header pin 38. Like the other CIP channels, it defaults to enabled, 2 s ON / 10 s OFF. Configure `gpio.cip.water_intake` in `config.yaml`. All dashboard variants and both Ecava pages expose the fourth channel.
+
+State: `rpi.cip.water_intake` in the retained SCADA state JSON. Command on `factory/cutting-gutting/scada/command`: `{ "target": "cip", "device": "water_intake", "parameters": { "enable": 1, "on_ms": 2000, "off_ms": 10000 } }`. Direct commands also use `factory/cutting-gutting/cip/water_intake/set`. Ecava operator values are seconds; MQTT uses milliseconds.
+
+The simulator CP-IO22 tab runs local CIP cycles, including Water Intake, without physical GPIO or an additional Modbus slave. These local cycles do not control or publish to the real Raspberry Pi.

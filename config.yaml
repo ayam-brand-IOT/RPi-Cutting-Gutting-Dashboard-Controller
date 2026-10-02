@@ -68,12 +68,13 @@ gpio:
     # Reserved real input pins; keep disabled until motor feedback is wired.
     cutting_motors_on:   {enabled: false, pin: 12, pull_up: null, active_low: false}
     cutting_motors_trip: {enabled: false, pin: 13, pull_up: null, active_low: false}
-    # BCM16 remains spare. BCM17/18/19 remain the CIP outputs.
+    # BCM16 remains spare. BCM17/18/19/20 are the CIP outputs.
   # CIP durations in SECONDS (s): 2 s ON, 10 s OFF. Decimals allowed.
   cip:
     gutting_left:  {pin: 17, active_high: true, enable: true, on_s: 2, off_s: 10}
     cutting:       {pin: 18, active_high: true, enable: true, on_s: 2, off_s: 10}
     gutting_right: {pin: 19, active_high: true, enable: true, on_s: 2, off_s: 10}
+    water_intake:  {pin: 20, active_high: true, enable: true, on_s: 2, off_s: 10}
 
 # Profils de lecture uniquement : aucun slave supplémentaire créé.
 # Adresses logiques utilisées directement dans pymodbus, sans soustraire 1.

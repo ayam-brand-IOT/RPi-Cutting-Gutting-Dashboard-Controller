@@ -656,14 +656,15 @@ def run_dashboard(config, devices, state, stop_event, screenshot_event=None):
             )
             _text(screen, "CIP — CLEANING", (margin, cip_title_y),
                   13, MUTED, True)
-            cip_w = (w - 2 * margin - 2 * gap) // 3
+            cip_w = (w - 2 * margin - 3 * gap) // 4
             cip_data = snapshot.get("rpi", {}).get("cip", {})
             cip_items = (("Left gutting", "gutting_left"),
                          ("Cutting machine", "cutting"),
-                         ("Right gutting", "gutting_right"))
+                         ("Right gutting", "gutting_right"),
+                         ("Water Intake", "water_intake"))
             for index, (label, name) in enumerate(cip_items):
                 x = margin + index * (cip_w + gap)
-                width = cip_w if index < 2 else w - margin - x
+                width = cip_w if index < 3 else w - margin - x
                 _cip_card(screen, pygame.Rect(x, cip_y, width, cip_h),
                           label, cip_data.get(name, {}))
 

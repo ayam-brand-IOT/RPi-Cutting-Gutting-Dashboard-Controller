@@ -41,5 +41,16 @@ for (const path of paths) {
   assert.equal(context.latest.electricity_meter_energy_total_kwh, null);
   assert.equal(context.latest.vfd_infeed_connected, 0);
   assert.equal(context.latest.vfd_infeed_frequency_hz, null);
-  console.log(path + ': online, calibration, offline and missing-device checks passed');
+  assert.equal(context.CIP.length, 4);
+  assert.equal(context.CIP[3].name, 'Water Intake');
+  context.consumeState({rpi: {cip: {water_intake: {enable: true, on_ms: 1250, off_ms: 10000, output: true}}}});
+  assert.equal(context.latest.cip_water_intake_on_actual, 1.25);
+  assert.equal(context.latest.cip_water_intake_enable_actual, 1);
+  assert.equal(context.latest.cip_water_intake_output, 1);
+  const command = context.commandFromKey('cip_water_intake_on_cmd', 2.5);
+  assert.equal(command.device, 'water_intake');
+  assert.equal(command.target, 'cip');
+  assert.equal(command.parameters.on_ms, 2500);
+  assert.equal(context.commandFromKey('cip_water_intake_enable_cmd', 0).parameters.enable, 0);
+  console.log(path + ': telemetry and Water Intake command checks passed');
 }
