@@ -53,6 +53,8 @@ def make_cip_simulator(config):
     manager = GPIOManager(config, StateStore([]), threading.Event())
     manager.outputs = {channel['pin']: SimulatedOutput()
                        for channel in manager.channels.values()}
+    manager.inputs = {name: SimulatedOutput() for name, item in config.get('inputs', {}).items()
+                      if item.get('enabled', True) and item.get('people_side') in ('left', 'right')}
     return manager
 
 # Appareils câblés en réel : exclus du simulateur (ni slave, ni onglet).
@@ -250,7 +252,7 @@ def build_gui():
 
     cip_sim = make_cip_simulator(cfg.get('gpio', {}))
     cip_tab = ttk.Frame(notebook, padding=10)
-    notebook.add(cip_tab, text='CP-IO22 / CIP')
+    notebook.add(cip_tab, text='CP-IO22 / CIP / People')
     ttk.Label(cip_tab, text='Local GPIO simulation — no physical outputs or MQTT publishing').grid(
         row=0, column=0, columnspan=5, sticky='w', pady=(0, 10))
     for column, title in enumerate(('Channel / BCM GPIO', 'Enabled', 'ON (s)', 'OFF (s)', 'Output')):
@@ -286,10 +288,35 @@ def build_gui():
 
         ttk.Button(cip_tab, text='Apply', command=apply_cip).grid(row=row, column=5, padx=8)
 
+    people_row = len(cip_sim.channels) + 3
+    ttk.Label(cip_tab, text='People counters — toggle a button to hold/release it (100 ms debounce)').grid(
+        row=people_row, column=0, columnspan=6, sticky='w', pady=(16, 8))
+    people_indicators = {}
+    for index, side in enumerate(('left', 'right'), start=1):
+        row = people_row + index
+        count_var = tk.StringVar(value='--')
+        people_indicators[side] = count_var
+        ttk.Label(cip_tab, text=side.capitalize() + ' people').grid(row=row, column=0, sticky='w', padx=8)
+        ttk.Label(cip_tab, textvariable=count_var).grid(row=row, column=1)
+        for name, item in cip_sim.input_cfg.items():
+            if name not in cip_sim.inputs or item.get('people_side') != side:
+                continue
+            pressed = tk.BooleanVar(value=False)
+            delta = item['people_delta']
+            ttk.Checkbutton(cip_tab, text=f"{'+' if delta > 0 else '-'} / GPIO{item['pin']}",
+                            variable=pressed,
+                            command=lambda n=name, v=pressed: setattr(cip_sim.inputs[n], 'value', v.get())).grid(
+                                row=row, column=2 if delta > 0 else 3, padx=8)
+
     def refresh_cip():
         now = time.monotonic()
         cip_sim._apply_commands(now)
         cip_sim._run_cycles(now)
+        cip_sim._publish_state(now)
+        counts = cip_sim.state.snapshot()['rpi'].get('people_gpio', {})
+        for side, indicator in people_indicators.items():
+            value = counts.get(side)
+            indicator.set('--' if value is None else str(value))
         for name, channel in cip_sim.channels.items():
             cip_indicators[name].set('ON' if channel['output'] else
                                      'OFF' if channel['enable'] else 'DISABLED')

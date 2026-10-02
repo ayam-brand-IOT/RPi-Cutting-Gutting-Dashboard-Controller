@@ -22,8 +22,9 @@ class GPIOManager(threading.Thread):
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=50)
         self.channels = {}
         self.input_cfg = config.get("inputs", {})
-        self._presence_samples = {}
-        self._presence_stable = {}
+        self._button_samples = {}
+        self._button_stable = {}
+        self._people_counts = {"left": 0, "right": 0}
 
         for name, item in config.get("cip", {}).items():
             durations = {}
@@ -81,7 +82,7 @@ class GPIOManager(threading.Thread):
         channel["output"] = active
 
     def _setup(self):
-        if any(cfg.get("presence_side") in ("left", "right") for cfg in self.input_cfg.values()):
+        if any(cfg.get("people_side") in ("left", "right") for cfg in self.input_cfg.values()):
             self.state.update_gpio({}, people_counts={"left": None, "right": None})
         if DigitalInputDevice is None:
             raise RuntimeError("gpiozero n'est pas installé")
@@ -152,28 +153,36 @@ class GPIOManager(threading.Thread):
     def _publish_state(self, now=None):
         now = time.monotonic() if now is None else now
         values = {}
+        presses = {"left": [], "right": []}
         for name, device in self.inputs.items():
             value = bool(device.value)
             cfg = self.input_cfg[name]
-            if cfg.get("presence_side") in ("left", "right"):
-                previous = self._presence_samples.get(name)
+            if cfg.get("people_side") in ("left", "right"):
+                previous = self._button_samples.get(name)
                 if previous is None or previous[0] != value:
-                    self._presence_samples[name] = (value, now)
-                if now - self._presence_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
-                    self._presence_stable[name] = value
-                if name in self._presence_stable:
-                    values[name] = self._presence_stable[name]
+                    self._button_samples[name] = (value, now)
+                if now - self._button_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
+                    stable = self._button_stable.get(name)
+                    self._button_stable[name] = value
+                    # A held button at startup is not a press. First release it.
+                    if stable is False and value:
+                        presses[cfg["people_side"]].append(int(cfg["people_delta"]))
+                if name in self._button_stable:
+                    values[name] = self._button_stable[name]
             else:
                 values[name] = value
         people = None
-        if any(cfg.get("presence_side") in ("left", "right") for cfg in self.input_cfg.values()):
+        if any(cfg.get("people_side") in ("left", "right") for cfg in self.input_cfg.values()):
             people = {}
             for side in ("left", "right"):
                 names = [name for name, cfg in self.input_cfg.items()
-                         if cfg.get("presence_side") == side and cfg.get("enabled", True)]
-                people[side] = (sum(values[name] for name in names)
-                                if len(names) == 4 and all(name in values for name in names)
-                                else None)
+                         if cfg.get("people_side") == side and cfg.get("enabled", True)]
+                ready = (len(names) == 2 and all(name in values for name in names)
+                         and {self.input_cfg[name].get("people_delta") for name in names} == {-1, 1})
+                if ready:
+                    # Opposite presses in the same sample cancel, even at zero.
+                    self._people_counts[side] = max(0, self._people_counts[side] + sum(presses[side]))
+                people[side] = self._people_counts[side] if ready else None
         cip = {
             name: {
                 "enable": channel["enable"],

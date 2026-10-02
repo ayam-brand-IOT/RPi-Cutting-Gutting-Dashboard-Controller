@@ -651,40 +651,30 @@ side's vision/gutting device. Legacy global payloads (`7`, `{"people_count": 7}`
 per-machine breakdown. No equal split of a global total is inferred.
 
 
-### CP-IO22 presence inputs (4 workstations per machine)
+### CP-IO22 people-count buttons
 
-Source: https://www.comfilewiki.co.kr/ko/doku.php?id=comfilepi%3Acpio%3Acp-io22%3Aindex
+Use momentary buttons on the CP-IO22 GPIO-labelled INPUT terminals (BCM numbering):
 
-Use the board's GPIO-labelled INPUT terminals, in BCM numbering, not the
-physical header pin numbers:
+| Side | Add one person (+) | Remove one person (-) |
+|---|---|---|
+| LEFT | GPIO4 | GPIO5 |
+| RIGHT | GPIO8 | GPIO9 |
 
-| Machine | Workstation 1 | Workstation 2 | Workstation 3 | Workstation 4 |
-|---|---|---|---|---|
-| LEFT | GPIO4 | GPIO5 | GPIO6 | GPIO7 |
-| RIGHT | GPIO8 | GPIO9 | GPIO10 | GPIO11 |
+Each side has an internal counter, starting at **zero on application restart**.
+A press stable for 100 ms changes it by one. Holding a button does not repeat;
+release it for 100 ms before pressing again. A button held at startup is ignored
+until released and pressed again. Counts never go below zero and have no fixed
+four-person limit. Opposite presses accepted in the same sample cancel.
 
-GPIO12/13 are reserved for cutting motor feedback (still disabled); GPIO16
-is spare. GPIO17/18/19/20 are CIP outputs. The old provisional GPIO20/21
-motor input assignments were corrected because these are CP-IO22 outputs.
+Configure `people_side`, `people_delta` (+1/-1) and `debounce_s` in `gpio.inputs`.
+HIGH means pressed (`pull_up: null`, `active_low: false`); set `active_low: true`
+if the field signal is inverted. GPIO6/7/10/11/16 are spare; GPIO12/13 reserve
+cutting motor feedback. GPIO17/18/19/20 remain CIP outputs.
 
-Each sensor must provide a maintained occupied/unoccupied signal, not a pulse
-for each passing person. The four stable occupied signals are summed (0–4).
-Inputs must remain stable for 100 ms; initial or missing readings show `--`.
-A failed input makes that side's count unknown; a GPIO failure invalidates both.
-`rpi.people_gpio` and `rpi.people_gpio_total` are published in the normal state.
-GPIO counts have priority over MQTT/manual counts in the cycle dashboard and
-the current shared total-people helper. MQTT does not overwrite GPIO readings.
-
-The initial configuration assumes HIGH = occupied (`pull_up: null`,
-`active_low: false`); verify empty/occupied at commissioning and invert
-`active_low` for any sensor whose logic is reversed. Disable SPI if it claims
-GPIO7–11, and ensure no overlay or other process owns GPIO4–11.
-
-Comfile specifies CP-IO22 for ComfilePi, not a bare Raspberry Pi. Verify the
-actual host/interface before wiring. Connect sensors through the CP-IO22's
-isolated field inputs and COM according to its wiring diagram (12–24 V nominal);
-do not connect field voltage directly to a Raspberry Pi GPIO header.
-
+The existing `rpi.people_gpio` (left/right) and `rpi.people_gpio_total` state fields
+feed the dashboards and MQTT/Ecava. GPIO counts retain priority over manual/MQTT
+counts. An unavailable button makes that side unknown (`--`); a GPIO failure
+invalidates both counts. Connect buttons through the CP-IO22 field input terminals.
 
 ### Pinout de debug : CP-IO22 et Raspberry Pi
 
@@ -696,14 +686,14 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 
 | I/O CP-IO22 | GPIO BCM (`pin:`) | Broche physique RPi J8 | Affectation |
 |---|---:|---:|---|
-| IN | 4 | 7 | Presence LEFT 1 |
-| IN | 5 | 29 | Presence LEFT 2 |
-| IN | 6 | 31 | Presence LEFT 3 |
-| IN | 7 | 26 | Presence LEFT 4 / SPI0 CE1 |
-| IN | 8 | 24 | Presence RIGHT 1 / SPI0 CE0 |
-| IN | 9 | 21 | Presence RIGHT 2 / SPI0 MISO |
-| IN | 10 | 19 | Presence RIGHT 3 / SPI0 MOSI |
-| IN | 11 | 23 | Presence RIGHT 4 / SPI0 SCLK |
+| IN | 4 | 7 | People LEFT + |
+| IN | 5 | 29 | People LEFT - |
+| IN | 6 | 31 | Libre |
+| IN | 7 | 26 | Libre / SPI0 CE1 |
+| IN | 8 | 24 | People RIGHT + / SPI0 CE0 |
+| IN | 9 | 21 | People RIGHT - / SPI0 MISO |
+| IN | 10 | 19 | Libre / SPI0 MOSI |
+| IN | 11 | 23 | Libre / SPI0 SCLK |
 | IN | 12 | 32 | Cutting motors ON - reserve, desactive |
 | IN | 13 | 33 | Cutting motors TRIP - reserve, desactive |
 | IN | 16 | 36 | Libre |
@@ -747,7 +737,7 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 Debug : GPIO4 peut etre pris par 1-Wire ; GPIO7-11 par SPI0.
 GPIO14/15 (phys. 8/10) : UART /dev/serial0 du projet, hors I/O CP-IO22.
 GPIO0/1 (phys. 27/28) : identification HAT, a reserver.
-Presence : signal maintenu, HIGH=occupe, filtre 100 ms ; active_low inverse.
+People : boutons momentanes, HIGH=appuye, filtre 100 ms ; active_low inverse.
 Ne pas activer les entrees Cutting 12/13 avant verification du cablage.
 3V3 : phys. 1/17 ; 5V : phys. 2/4 ; GND : phys. 6/9/14/20/25/30/34/39.
 Les GPIO RPi sont en logique 3,3 V : jamais de 12/24 V sur J8.
@@ -757,8 +747,8 @@ Sources officielles :
 https://www.comfilewiki.co.kr/ko/doku.php?id=comfilepi%3Acpio%3Acp-io22%3Aindex
 https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#gpio
 
-Pour le diagnostic, suivre la chaine **capteur → entree CP-IO22 → GPIO BCM →
-cle `people_left_N` / `people_right_N` dans `rpi.gpio` → `rpi.people_gpio`
+Pour le diagnostic, suivre la chaine **bouton → entree CP-IO22 → GPIO BCM →
+cle `people_left_plus/minus` / `people_right_plus/minus` dans `rpi.gpio` → `rpi.people_gpio`
 → compteur affiche**. Un signal instable ou une entree indisponible peut
 laisser le compteur a `--`. La commande `pinout` (si installee) affiche le
 connecteur du Raspberry Pi ; elle ne prouve pas le cablage du CP-IO22.

@@ -53,18 +53,14 @@ gpio:
   enabled: true
   disable_waveshare_cip_on_start: true
   # CP-IO22 inputs: BCM4..13, BCM16. Outputs: BCM17..27.
-  # Presence: one maintained sensor per workstation; HIGH means occupied.
-  # Set active_low: true if the actual sensor/board signal is inverted.
+  # Momentary people-count buttons; HIGH means pressed.
+  # One count per debounced press, no repeat while held; counters start at zero.
   # No internal pull: the CP-IO22 provides the input conditioning.
   inputs:
-    people_left_1:  {enabled: true, pin: 4,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
-    people_left_2:  {enabled: true, pin: 5,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
-    people_left_3:  {enabled: true, pin: 6,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
-    people_left_4:  {enabled: true, pin: 7,  pull_up: null, active_low: false, presence_side: left, debounce_s: 0.1}
-    people_right_1: {enabled: true, pin: 8,  pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
-    people_right_2: {enabled: true, pin: 9,  pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
-    people_right_3: {enabled: true, pin: 10, pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
-    people_right_4: {enabled: true, pin: 11, pull_up: null, active_low: false, presence_side: right, debounce_s: 0.1}
+    people_left_plus:   {enabled: true, pin: 4, pull_up: null, active_low: false, people_side: left, people_delta: 1, debounce_s: 0.1}
+    people_left_minus:  {enabled: true, pin: 5, pull_up: null, active_low: false, people_side: left, people_delta: -1, debounce_s: 0.1}
+    people_right_plus:  {enabled: true, pin: 8, pull_up: null, active_low: false, people_side: right, people_delta: 1, debounce_s: 0.1}
+    people_right_minus: {enabled: true, pin: 9, pull_up: null, active_low: false, people_side: right, people_delta: -1, debounce_s: 0.1}
     # Reserved real input pins; keep disabled until motor feedback is wired.
     cutting_motors_on:   {enabled: false, pin: 12, pull_up: null, active_low: false}
     cutting_motors_trip: {enabled: false, pin: 13, pull_up: null, active_low: false}
