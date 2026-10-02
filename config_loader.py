@@ -11,22 +11,38 @@ def load_config(path: str) -> dict:
         cfg = yaml.safe_load(handle)
 
     devices = cfg.get("devices", {})
+    profiles = cfg.get("device_profiles", {})
     resolving: set[str] = set()
 
     def resolve(name: str) -> dict:
         item = devices[name]
         parent = item.get("inherit")
-        if not parent:
-            return copy.deepcopy(item)
         if name in resolving:
             raise ValueError(f"Héritage circulaire pour {name}")
         resolving.add(name)
-        base = resolve(parent)
+        base = resolve(parent) if parent else {}
         resolving.remove(name)
+        profile = item.get("profile")
+        if profile:
+            if profile not in profiles:
+                raise ValueError(f"Profil inconnu pour {name}: {profile}")
+            base.update(copy.deepcopy(profiles[profile]))
         base.update({k: copy.deepcopy(v) for k, v in item.items() if k != "inherit"})
         return base
 
     cfg["devices"] = {name: resolve(name) for name in devices}
+    for name, device in cfg["devices"].items():
+        for section in ("input_registers", "telemetry_holding_registers", "holding_registers", "coils"):
+            registers = device.get(section, {})
+            if not isinstance(registers, dict):
+                raise ValueError(f"devices.{name}.{section}: dictionnaire de registres attendu")
+            for key, spec in registers.items():
+                address = spec.get("address") if isinstance(spec, dict) else spec
+                if isinstance(address, bool) or not isinstance(address, int) or not 0 <= address <= 65535:
+                    raise ValueError(
+                        f"devices.{name}.{section}.{key}: adresse entière 0–65535 requise; "
+                        "vérifier l'indentation YAML"
+                    )
     # CIP register addresses/keys remain in native Modbus milliseconds.
     # Human-facing bounds in YAML are explicitly specified in seconds.
     for device in cfg["devices"].values():

@@ -166,8 +166,11 @@ def _statistics(screen, snapshot, config, devices, left, right):
         _text(screen, '--' if people is None else str(people), (x, 620),
               36, CYAN if people is not None else MUTED, True, 'center', max_width=160)
 
-    # Cutting VFD source is not configured yet; do not substitute gutting belt RPM.
-    _text(screen, 'FISH BELT SPEED   -- pockets/min', (640, 658), 17, MUTED,
+    pocket = _device(snapshot, 'vfd_pocket')
+    speed = pocket.get('values', {}).get('pockets_per_min') if pocket.get('connected') else None
+    speed_text = '--' if speed is None else f'{speed:.1f}'
+    _text(screen, f'BELT POCKET SPEED   {speed_text} pocket/min', (640, 658), 17,
+          CYAN if speed is not None else MUTED,
           anchor='center')
 
 

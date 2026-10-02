@@ -75,9 +75,57 @@ gpio:
     cutting:       {pin: 18, active_high: true, enable: true, on_s: 2, off_s: 10}
     gutting_right: {pin: 19, active_high: true, enable: true, on_s: 2, off_s: 10}
 
+# Profils de lecture uniquement : aucun slave supplémentaire créé.
+# Adresses logiques utilisées directement dans pymodbus, sans soustraire 1.
+device_profiles:
+  atv320:
+    model: ATV320U07N4C
+    type: vfd
+    telemetry_holding_blocks:
+      - {address: 3202, count: 1}
+      - {address: 8604, count: 1}
+    telemetry_holding_registers:
+      frequency_hz: {address: 3202, data_type: int16, scale: 0.1, decimals: 1}
+      motor_rpm: {address: 8604, data_type: int16}
+    holding_registers: {}
+    coils: {}
+
+  frenic_mini_c2:
+    model: FRENIC Mini C2
+    type: vfd
+    # FC03: groupe M = 0x08, M09 = 0x0809 = 2057, uint16 en 0.01 Hz.
+    # Fuji: y01=slave, y04=2 (9600), y05=0 (8 bits), y06=3 (8N1), y10=0 (RTU).
+    # y06=0 signifie 8N2 et ne correspond PAS au bus actuel.
+    telemetry_holding_blocks:
+      - {address: 2057, count: 1}
+    telemetry_holding_registers:
+      frequency_hz: {address: 2057, data_type: uint16, scale: 0.01, decimals: 2}
+    holding_registers: {}
+    coils: {}
+
 # Toutes les adresses ci-dessous sont des offsets zéro-based pour pymodbus.
 # 0 = 30001 pour Input Register, 0 = 40001 pour Holding Register.
 devices:
+  vfd_infeed:
+    profile: atv320
+    enabled: true
+    label: Belt Infeed
+    slave: 8
+
+  vfd_pocket:
+    # Remettre simplement "atv320" ici quand le Schneider sera réparé.
+    profile: frenic_mini_c2
+    enabled: true
+    label: Belt Pocket
+    slave: 9
+    # Effective pockets advanced per MOTOR revolution, including gearbox ratio.
+    # null = uncalibrated; dashboards show -- rather than inventing a speed.
+    # Formula: pocket/min = abs(motor_rpm) * pockets_per_motor_revolution.
+    pockets_per_motor_revolution: null
+    # Fuji: pocket/min = frequency_hz * coefficient (pocket/min par Hz).
+    # Aucun RPM moteur inventé ; null laisse pocket/min à -- jusqu'à calibration.
+    pockets_per_min_per_hz: null
+
   gutting_left:
     enabled: true
     label: Left gutting
@@ -117,7 +165,7 @@ devices:
       ppr_wheel2: {address: 6, min: 1, max: 999}        # These settings calibrate the RPM measurement; they do not set motor speed.
       blade_rpm_min: {address: 7, min: 0, max: 9999}    # RPM = pulses per second x 60 / PPR.
       debounce_ms: {address: 8, min: 0, max: 100}       # Example: 2 magnets detected per turn => PPR = 2; 100 pulses/s => 3000 RPM.
-      coils:                                            # Firmware default: 1. Match the actual number of pulses per turn.
+    coils:
       eject_enable: {address: 0}
       cip_enable: {address: 1}
       alarm_ack: {address: 2}
@@ -150,33 +198,40 @@ devices:
     slave: 7
     enabled: true
 
-  # ADRESSES PROVISOIRES : remplacer selon la notice du compteur réel.
-  # Ce device reste désactivé pour éviter des timeouts tant qu'il n'est pas câblé.
+  # Acrel ADL400-D, ADL400 manual table 8: FC03, MSW first.
+  # Keep disabled until wired and slave/bus settings are confirmed.
   electricity_meter:
     enabled: false
-    label: Electricity meter
+    label: Acrel ADL400-D
+    model: ADL400-D
+    meter_profile: acrel_adl400
     slave: 10
     type: utility_meter
-    input_blocks:
-      - {address: 0, count: 6}
-    input_registers:
-      power_kw:          {address: 0, data_type: float32, word_order: big, decimals: 2}
-      energy_today_kwh:  {address: 2, data_type: float32, word_order: big, decimals: 2}
-      energy_month_kwh:  {address: 4, data_type: float32, word_order: big, decimals: 2}
+    telemetry_holding_blocks:
+      - {address: 10, count: 2}    # 0x000A: forward/import active energy
+      - {address: 141, count: 2}   # 0x008D PT, 0x008E CT
+      - {address: 362, count: 2}   # 0x016A: total active power (32-bit)
+    telemetry_holding_registers:
+      energy_import_secondary_kwh: {address: 10, data_type: uint32, word_order: big, scale: 0.01}
+      pt_ratio: {address: 141}
+      ct_ratio: {address: 142}
+      power_secondary_kw: {address: 362, data_type: int32, word_order: big, scale: 0.0001}
     holding_registers: {}
     coils: {}
 
-  # ADRESSES PROVISOIRES : remplacer selon la notice du compteur réel.
+  # DAE U-100B: integrated RS485 Modbus RTU, 9600 baud, 8N1.
+  # Native units: US gallons / GPM (U-100BM is the metric variant).
+  # Default slave = last two serial-number digits; 11 is only a proposed ID.
+  # Register map unavailable: do not use the old placeholder float32 addresses.
   water_meter:
     enabled: false
-    label: Water meter
+    label: DAE U-100B
+    model: U-100B
     slave: 11
     type: utility_meter
-    input_blocks:
-      - {address: 0, count: 6}
-    input_registers:
-      flow_l_min:       {address: 0, data_type: float32, word_order: big, decimals: 2}
-      water_today_m3:   {address: 2, data_type: float32, word_order: big, decimals: 3}
-      water_month_m3:   {address: 4, data_type: float32, word_order: big, decimals: 3}
+    telemetry_holding_blocks: []
+    telemetry_holding_registers: {}
+    # Apply after the raw register units/scaling have been confirmed:
+    # 1 US gal = 0.003785411784 m3; 1 GPM = 3.785411784 L/min.
     holding_registers: {}
     coils: {}

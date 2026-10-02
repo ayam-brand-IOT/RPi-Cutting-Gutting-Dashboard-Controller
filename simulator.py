@@ -12,7 +12,7 @@ Pour tester en parallèle avec main.py, utilise un port série virtuel :
 Exemple : /dev/pts/3 dans CE simulateur, /dev/pts/4 comme modbus_port dans
 config.yaml pour main.py.
 
-Nécessite : pip install pymodbus (déjà dans requirements.txt)
+Nécessite : python -m pip install -r requirements-simulator.txt
 """
 
 import asyncio
@@ -32,6 +32,12 @@ try:
 except ImportError:
     from pymodbus.datastore import ModbusSlaveContext as _DeviceCtx
 
+if not hasattr(_DeviceCtx, "getValues"):
+    raise RuntimeError(
+        "Version PyModbus incompatible avec le simulateur. "
+        "Installer les dépendances avec: python -m pip install -r requirements-simulator.txt"
+    )
+
 from config_loader import load_config
 
 # Appareils câblés en réel : exclus du simulateur (ni slave, ni onglet).
@@ -39,7 +45,7 @@ from config_loader import load_config
 # Exemple : REAL_DEVICES = {"gutting_left", "vision_left"}
 REAL_DEVICES: set[str] = {""}
 
-BLOCK_SIZE = 200
+BLOCK_SIZE = 9000  # Includes ATV320 RFRD at logical address 8604.
 
 FX_COIL    = 1
 FX_HOLDING = 3
@@ -157,6 +163,10 @@ class ModbusSimulator:
         with self._lock:
             return self._contexts[slave].getValues(FX_HOLDING, offset, count=1)[0]
 
+    def set_holding(self, slave: int, offset: int, value: int):
+        with self._lock:
+            self._contexts[slave].setValues(FX_HOLDING, offset, [int(value) & 0xFFFF])
+
     def get_coil(self, slave: int, offset: int) -> bool:
         with self._lock:
             return bool(self._contexts[slave].getValues(FX_COIL, offset, count=1)[0])
@@ -175,6 +185,10 @@ def build_gui():
 
     root = tk.Tk()
     root.title("Simulateur Modbus RTU — Cutting-Gutting")
+    icon_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    icon_path = icon_dir / "assets" / "simulator-icon.ico"
+    if sys.platform == "win32" and icon_path.exists():
+        root.iconbitmap(str(icon_path))
 
     sim = ModbusSimulator(devices)
     refreshers_by_tab: dict[tk.Widget, list] = {}
@@ -283,6 +297,22 @@ def build_gui():
                     get_fn=lambda a=slave, o=offset: sim.get_input(a, o),
                     set_fn=lambda v, a=slave, o=offset: sim.set_input(a, o, v),
                     minv=0, maxv=65535,
+                )
+                row += 1
+
+        telemetry = dev.get("telemetry_holding_registers", {})
+        if telemetry:
+            row = add_section_header(tab, row, "FC03 telemetry (raw words; see scale in config.yaml)")
+            for reg_name, spec in telemetry.items():
+                offset = _addr(spec)
+                signed = isinstance(spec, dict) and spec.get("data_type") == "int16"
+                def signed_value(a=slave, o=offset, is_signed=signed):
+                    value = sim.get_holding(a, o)
+                    return value - 65536 if is_signed and value >= 32768 else value
+                add_int_field(
+                    tab, row, reg_name, get_fn=signed_value,
+                    set_fn=lambda v, a=slave, o=offset: sim.set_holding(a, o, v),
+                    minv=-32768 if signed else 0, maxv=32767 if signed else 65535,
                 )
                 row += 1
 

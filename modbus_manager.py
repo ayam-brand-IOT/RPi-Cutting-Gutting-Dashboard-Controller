@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import queue
 import struct
 import threading
@@ -82,23 +83,39 @@ class ModbusManager(threading.Thread):
         slave = int(device["slave"])
         raw = {}
         try:
-            for block in device.get("input_blocks", []):
+            blocks = [(block, self.client.read_input_registers)
+                      for block in device.get("input_blocks", [])]
+            # FC03 telemetry is separate from writable settings (drives/meters).
+            blocks += [(block, self.client.read_holding_registers)
+                       for block in device.get("telemetry_holding_blocks", [])]
+            if not blocks:
+                raise ValueError("aucun registre de télémétrie configuré")
+            for block, reader in blocks:
                 response = self._call(
-                    self.client.read_input_registers,
+                    reader,
                     slave,
                     address=int(block["address"]),
                     count=int(block["count"]),
                 )
                 if response.isError():
                     raise IOError(str(response))
+                if len(response.registers) != int(block["count"]):
+                    raise IOError("réponse Modbus incomplète")
                 start = int(block["address"])
                 for offset, value in enumerate(response.registers):
                     raw[start + offset] = value
 
             values = {
                 key: self._decode_input(raw, spec)
-                for key, spec in device.get("input_registers", {}).items()
+                for key, spec in {
+                    **device.get("input_registers", {}),
+                    **device.get("telemetry_holding_registers", {}),
+                }.items()
             }
+            if device.get("type") == "vfd":
+                values.update(self._vfd_speed(values, device))
+            if device.get("meter_profile") == "acrel_adl400":
+                values.update(self._acrel_values(values))
             if "ejector_count_lo" in values:
                 values["ejector_count"] = (
                     values["ejector_count_lo"]
@@ -117,6 +134,39 @@ class ModbusManager(threading.Thread):
                 )
         except Exception as error:
             self._set_offline(name, error)
+
+    @staticmethod
+    def _acrel_values(values):
+        """ADL400 integer readings are secondary-side; apply configured PT and CT."""
+        pt, ct = values["pt_ratio"], values["ct_ratio"]
+        if not 1 <= pt <= 9999 or not 1 <= ct <= 9999:
+            raise ValueError("ADL400: rapports PT/CT invalides")
+        ratio = pt * ct
+        return {
+            "power_kw": round(values["power_secondary_kw"] * ratio, 3),
+            "energy_total_kwh": round(values["energy_import_secondary_kwh"] * ratio, 2),
+            # Lifetime index is not today's/month's consumption.
+            "energy_today_kwh": None,
+            "energy_month_kwh": None,
+        }
+
+    @staticmethod
+    def _vfd_speed(values, device):
+        """Prefer drive motor RPM; frequency-only drives need a Hz calibration."""
+        rpm = values.get("motor_rpm")
+        factor = device.get("pockets_per_motor_revolution") if rpm is not None else None
+        source = rpm
+        if factor is None:
+            factor = device.get("pockets_per_min_per_hz")
+            source = values.get("frequency_hz")
+        if factor is None:
+            return {"pockets_per_min": None}
+        factor = float(factor)
+        if not math.isfinite(factor) or factor <= 0:
+            raise ValueError("VFD: coefficient de vitesse positif et fini requis")
+        if source is None:
+            return {"pockets_per_min": None}
+        return {"pockets_per_min": round(abs(source) * factor, 1)}
 
     @staticmethod
     def _decode_input(raw, spec):

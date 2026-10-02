@@ -5,7 +5,7 @@ a = Analysis(
     ['simulator.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('assets/simulator-icon.ico', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['modbus_multi_client_simulator.ico'],
+    icon=['assets/simulator-icon.ico'],
 )

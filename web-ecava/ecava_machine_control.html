@@ -74,16 +74,33 @@
     </article>
   </section>
 
+  <div class="section-title"><h2>Belt speeds</h2><span>Modbus read-only</span></div>
+  <section class="grid" aria-label="VFD belt speeds">
+    <article class="card wide">
+      <div class="card-head"><h3>VFD 1 · Belt Infeed</h3><span class="badge" data-online="vfd_infeed_connected">OFFLINE</span></div>
+      <div class="value-row"><span>Estimated motor speed</span><b><span data-value="vfd_infeed_motor_rpm">--</span> RPM</b></div>
+      <div class="value-row"><span>Output frequency</span><b><span data-value="vfd_infeed_frequency_hz">--</span> Hz</b></div>
+    </article>
+    <article class="card wide">
+      <div class="card-head"><h3>VFD 2 · Belt Pocket</h3><span class="badge" data-online="vfd_pocket_connected">OFFLINE</span></div>
+      <div class="value-row"><span>Pocket speed</span><b><span id="cutting-fish-belt-speed" data-value="vfd_pocket_pockets_per_min">--</span> pocket/min</b></div>
+      <div class="value-row"><span>Output frequency</span><b><span data-value="vfd_pocket_frequency_hz">--</span> Hz</b></div>
+      <div class="value-row"><span>Estimated motor speed</span><b><span data-value="vfd_pocket_motor_rpm">--</span> RPM</b></div>
+      <p id="pocket-calibration" style="color:var(--muted);font-size:12px">Pocket conversion pending mechanical calibration.</p>
+    </article>
+  </section>
+
   <div class="section-title"><h2>Utilities</h2><span>Utility consumption — Modbus → MQTT</span></div>
   <section class="grid">
     <article class="card wide">
-      <div class="card-head"><h3>Electricity</h3><span class="badge" data-online="electricity_meter_connected">OFFLINE</span></div>
+      <div class="card-head"><h3>Electricity · Acrel ADL400-D</h3><span class="badge" data-online="electricity_meter_connected">OFFLINE</span></div>
       <div class="value-row"><span>Daily consumption</span><b><span data-value="electricity_meter_energy_today_kwh">--</span> kWh</b></div>
       <div class="value-row"><span>Monthly consumption</span><b><span data-value="electricity_meter_energy_month_kwh">--</span> kWh</b></div>
+      <div class="value-row"><span>Cumulative imported energy</span><b><span data-value="electricity_meter_energy_total_kwh">--</span> kWh</b></div>
       <div class="value-row"><span>Current power</span><b><span data-value="electricity_meter_power_kw">--</span> kW</b></div>
     </article>
     <article class="card wide">
-      <div class="card-head"><h3>Water</h3><span class="badge" data-online="water_meter_connected">OFFLINE</span></div>
+      <div class="card-head"><h3>Water · DAE U-100B</h3><span class="badge" data-online="water_meter_connected">OFFLINE</span></div>
       <div class="value-row"><span>Daily consumption</span><b><span data-value="water_meter_water_today_m3">--</span> m³</b></div>
       <div class="value-row"><span>Monthly consumption</span><b><span data-value="water_meter_water_month_m3">--</span> m³</b></div>
       <div class="value-row"><span>Current flow</span><b><span data-value="water_meter_flow_l_min">--</span> L/min</b></div>
@@ -138,12 +155,20 @@ function cipMilliseconds(seconds){
 }
 
 function consumeState(state){
-  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
+  var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter','vfd_infeed','vfd_pocket'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
   if(!state||typeof state!=='object')throw new Error('Invalid JSON state');
   offsets=state.rpi&&state.rpi.counter_offsets?state.rpi.counter_offsets:{};
   latest.productivity_setpoint_actual=state.rpi&&state.rpi.productivity_setpoint!==undefined?state.rpi.productivity_setpoint:null;
   for(i=0;i<deviceNames.length;i++){
-    name=deviceNames[i];d=state.devices&&state.devices[name];if(!d)continue;
+    name=deviceNames[i];d=state.devices&&state.devices[name];
+    if(name==='vfd_infeed'||name==='vfd_pocket'||name==='electricity_meter'||name==='water_meter'){
+      latest[name+'_connected']=d&&d.connected?1:0;
+      ['motor_rpm','frequency_hz','pockets_per_min','power_kw','energy_total_kwh','energy_today_kwh','energy_month_kwh','flow_l_min','water_today_m3','water_month_m3'].forEach(function(field){
+        latest[name+'_'+field]=d&&d.connected&&d.values?d.values[field]:null;
+      });
+      continue;
+    }
+    if(!d)continue;
     latest[name+'_connected']=d.connected?1:0;
     for(key in d.values){
       if(!Object.prototype.hasOwnProperty.call(d.values,key))continue;
@@ -278,6 +303,7 @@ function build(){
 }
 function render(){
   var nodes=document.querySelectorAll('[data-value]'),i,key,v,input,badge;
+  document.getElementById('pocket-calibration').textContent=!isOn(latest.vfd_pocket_connected)?'Waiting for VFD telemetry.':latest.vfd_pocket_pockets_per_min===null||latest.vfd_pocket_pockets_per_min===undefined?'Pocket conversion pending mechanical calibration.':'';
   for(i=0;i<nodes.length;i++){key=nodes[i].getAttribute('data-value');v=safeValue(latest[key]);if(nodes[i].querySelector('small'))nodes[i].childNodes[0].nodeValue=v+' ';else nodes[i].textContent=v}
   nodes=document.querySelectorAll('[data-led]');for(i=0;i<nodes.length;i++){nodes[i].classList.toggle('on',isOn(latest[nodes[i].getAttribute('data-led')]))}
   nodes=document.querySelectorAll('[data-online]');for(i=0;i<nodes.length;i++){v=isOn(latest[nodes[i].getAttribute('data-online')]);nodes[i].textContent=v?'ONLINE':'OFFLINE';nodes[i].classList.toggle('online',v)}

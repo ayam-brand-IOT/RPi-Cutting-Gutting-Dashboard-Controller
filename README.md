@@ -569,9 +569,41 @@ Files are written as timestamped PNGs to `dashboard.screenshot_dir` (`screenshot
 
 ### 5.5 Water and electricity meters
 
-Two provisional devices are included in `config.yaml`: slaves 10 and 11, disabled by default. The reader supports `uint16`, `int16`, `uint32`, `int32` and `float32`, with `word_order`, `scale`, `offset` and `decimals`. Replace the addresses and types using the meter manuals, then set each device to `enabled: true`.
+The installed models are **Acrel ADL400-D** (`electricity_meter`) and
+**DAE U-100B** (`water_meter`). Both remain disabled until commissioned.
+Their slave IDs are editable in `config.yaml`:
+`devices.electricity_meter.slave` (currently 10) and
+`devices.water_meter.slave` (currently 11). These values do not change the
+physical meter's address. Set the YAML to match the actual device.
 
-Daily/monthly values and connection status automatically appear in the dashboard and the MQTT JSON state at `factory/cutting-gutting/scada/state`. Ecava reads them through the same `machine_state_json` tag.
+For Acrel, read-only FC03 telemetry follows the published ADL400 table:
+import energy at 0x000A (uint32, 0.01 kWh), total active power at 0x016A
+(int32, 0.0001 kW), PT/CT ratios at 0x008D/0x008E. Words are MSW first.
+The reader applies PT x CT and publishes `power_kw` and `energy_total_kwh`.
+Compare readings with the installed meter display/manual before enabling it
+in production, since register maps can vary by revision.
+Source: <https://www.acrelenergy.com/uploads/file/adl400-manual.pdf>.
+
+DAE U-100B has integrated RS485 Modbus RTU at **9600 baud, 8N1**; the
+default address is the last two serial-number digits, according to its datasheet.
+Set `devices.water_meter.slave` to the actual address derived from the SN or
+configured on the meter, avoiding addresses already used on this bus.
+U-100B uses US gallons/GPM; U-100BM is the metric display variant.
+The U-100B-specific register table still needs confirmation, so the invented
+float32 registers have been removed. Fill `telemetry_holding_blocks` and
+`telemetry_holding_registers` from that table, or use `input_blocks` and
+`input_registers` if it specifies FC04, before enabling this device. An empty
+telemetry map is rejected rather than reported online.
+The generic reader supports `uint16`, `int16`, `uint32`, `int32`, `float32`,
+`word_order`, `scale`, `offset`, and `decimals`. Once raw register units are
+confirmed, convert gallons to m3 with 0.003785411784 and GPM to L/min with
+3.785411784 (in addition to any raw-register scaling).
+Source: <https://daecontrol.com/wp-content/uploads/2025/09/U-100b-Datasheet-1.6.pdf>.
+
+Ecava shows the meter models and Acrel's cumulative import index.
+The existing MQTT JSON includes the decoded readings without new Ecava tags.
+Daily/monthly consumption is not the cumulative index: those fields stay `null`
+(`--` in dashboards) until period tracking or meter-specific history is added.
 
 ### 5.6 Time, weather and rate per worker
 
@@ -751,6 +783,76 @@ an `_ms` key. Legacy GPIO configuration with `_ms` is still readable, but
 do not specify both units for the same duration. Ejection timings remain ms.
 
 
+### Belt speed telemetry and replacement VFD profiles
+
+Two drives are configured in `config.yaml`: `vfd_infeed` uses the Schneider
+ATV320U07N4C profile (Belt Infeed, proposed slave 8), and `vfd_pocket` currently
+uses the Fuji FRENIC Mini C2 profile (Belt Pocket, proposed slave 9).
+Set each drive's Modbus address and match the existing RTU bus: 9600 baud, 8N1.
+These IDs are proposals; change `slave` if the installed addresses differ.
+This implementation only reads speed; no VFD commands or setpoints are exposed.
+
+The `device_profiles` section stores both register maps without creating extra
+slaves. Change only `devices.vfd_pocket.profile` to select the replacement:
+
+```yaml
+devices:
+  vfd_pocket:
+    profile: frenic_mini_c2  # change to atv320 when repaired
+    slave: 9
+```
+
+Reload by restarting the supervisor after editing the YAML. The same
+`vfd_pocket` MQTT/device name, slave address, and calibration settings remain.
+The loader copies the selected profile, then applies device-local settings.
+Unknown profile names are rejected at startup. Deploy `config_loader.py` and
+`modbus_manager.py` with this YAML; the old loader does not support profiles.
+
+**Schneider profile:** FC03 reads logical addresses **3202 (RFR)**, signed 16-bit, 0.1 Hz, and
+**8604 (RFRD)**, signed 16-bit, 1 RPM. Use these addresses directly in pymodbus;
+do not subtract one or add a 40000 register prefix. The separate
+`telemetry_holding_blocks` / `telemetry_holding_registers` mappings are polled
+every cycle and are not part of writable `holding_registers`.
+Schneider documents both speed variables here:
+<https://www.se.com/it/it/faqs/FAQ000268509/>.
+
+**Fuji profile:** FC03 reads **M09 = 0x0809 = 2057**, an unsigned 16-bit
+output-frequency value in **0.01 Hz** (5000 means 50.00 Hz).
+Group M is 0x08 and the low byte is the decimal function-code number.
+This profile reads frequency only; motor RPM remains unavailable (`--`).
+On the Fuji keypad set `y01` to the configured slave (currently 9),
+`y04=2` (9600 baud), `y05=0` (8 data bits), **`y06=3`** (no parity,
+one stop bit) and `y10=0` (Modbus RTU). `y06=0` means two stop bits in RTU
+and does not match this bus. This software does not write these drive settings.
+Fuji sources: [RS-485 manual, tables 3.2 and data format 22](https://americas.fujielectric.com/files/RS-485_Users_Manual_24A7-E-0082.pdf),
+[C2 communication supplement, M09 support](https://fujielectricspain.com/wp-content/uploads/2023/08/FRENIC-MEGA_Eco_Multi_Ace_MiniC2-RS-485-User_s-Manual-Supplement-versionFRENIC-MiniC2_a-1.pdf),
+[C2 link function settings](https://www.fujielectric.com/products/drives_inverters/ac_drives_lv/product_series/frenic-mini-c2_download__pr1.html).
+
+Ecava displays Infeed estimated **motor RPM**, both output frequencies in Hz,
+and Pocket speed in **pocket/min**. With the ATV320, motor RPM is estimated by the drive, not a
+measurement of conveyor roller RPM. To calibrate Pocket, set
+`devices.vfd_pocket.pockets_per_motor_revolution` to the effective number of
+pockets advanced per motor revolution, including reduction/transmission ratios.
+For a wheel advancing N pockets per wheel turn and a reduction G motor turns
+per wheel turn, this factor is N/G. The calculation is
+`abs(motor_rpm) * pockets_per_motor_revolution` (one decimal place).
+For the frequency-only Fuji profile, set
+`devices.vfd_pocket.pockets_per_min_per_hz` to a calibrated coefficient:
+`pocket/min = frequency_hz * pockets_per_min_per_hz`. For example, a measured
+174 pocket/min at 50 Hz gives 3.48; this is an example, not the installed belt's
+calibration. Frequency does not account for motor slip, so verify against actual
+pocket motion. An RPM coefficient alone cannot supply Fuji motor speed.
+When motor RPM and its coefficient are available, that conversion takes
+priority; otherwise the Hz coefficient is used if configured. Keep both
+calibration fields outside the profiles so drive swaps do not erase them.
+Until the applicable factor is known, leave it `null`: Pocket speed remains `--`, and
+Ecava indicates that calibration is pending. Offline VFD readings also show `--`.
+The default cycle dashboard shows Belt Pocket speed on Operation.
+The existing MQTT SCADA JSON automatically includes both VFD devices;
+no new Ecava tags are needed. Deploy the updated Python/config and HTML to use
+the feature. The Python simulator supports both telemetry registers; an older
+prebuilt `simulator.exe` needs rebuilding to include these changes.
+
 ### Productivity target (Operation)
 
 Ecava Machine Control exposes a common LEFT/RIGHT target in **fish/min** under
@@ -768,3 +870,24 @@ seconds, its Operation productivity number blinks red once per second. Monitorin
 continues on Maintenance. Reaching the target, disabling/changing the target,
 resetting counters, or losing that side's vision connection resets the timer.
 Each side is monitored independently.
+
+### Windows simulator and executable
+
+The Tk simulator uses the datastore API from PyModbus 3.11.3. Install its
+dedicated dependencies rather than installing the latest PyModbus:
+
+```powershell
+python -m pip install -r requirements-simulator.txt
+python .\simulator.py
+```
+
+Build the executable with the fish/Modbus application icon:
+
+```powershell
+python -m PyInstaller --noconfirm simulator.spec
+Copy-Item config.yaml dist\config.yaml
+```
+
+Keep the editable YAML beside `dist\simulator.exe`. Invalid register entries
+report their YAML path at load time. The `coils` map belongs directly under
+the device, alongside `holding_registers`, not inside it.
