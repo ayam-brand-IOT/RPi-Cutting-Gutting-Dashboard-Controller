@@ -79,13 +79,13 @@ class ButtonTests(unittest.TestCase):
         restarted._publish_state(1)
         self.assertFalse(restarted._group_enabled["water"])
 
-    def test_setup_pinout_and_active_low_outputs(self):
+    def test_setup_pinout_and_active_high_outputs(self):
         with patch("gpio_manager.DigitalInputDevice") as inp, patch("gpio_manager.DigitalOutputDevice") as out:
             self.manager._setup()
         self.assertEqual({c.args[0] for c in inp.call_args_list}, {4, 5, 8, 9, 10, 11})
         self.assertEqual({c.args[0] for c in out.call_args_list}, set(range(17, 23)))
         for call in out.call_args_list:
-            self.assertFalse(call.kwargs["active_high"])
+            self.assertTrue(call.kwargs["active_high"])
             self.assertFalse(call.kwargs["initial_value"])
 
 
