@@ -9,6 +9,61 @@ class FakeOutput:
         self.value = False
 
 
+class FakeInput:
+    def __init__(self, value):
+        self.value = value
+
+    def close(self):
+        pass
+
+
+def test_button_starts_and_stops_cip():
+    cfg = {
+        "inputs": {
+            "system_toggle": {
+                "enabled": True,
+                "pin": 6,
+                "pull_up": None,
+                "active_low": False,
+                "cip_toggle": True,
+                "debounce_s": 0.0,
+            }
+        },
+        "cip": {
+            "gutting_left": {"pin": 17, "active_high": True, "enable": True, "on_s": 2, "off_s": 10}
+        },
+    }
+    manager = GPIOManager(cfg, StateStore([]), threading.Event())
+    manager.inputs = {"system_toggle": FakeInput(False)}
+    manager.outputs = {17: FakeOutput()}
+    manager.channels["gutting_left"] = {
+        "pin": 17,
+        "active_high": True,
+        "enable": True,
+        "on_ms": 2000,
+        "off_ms": 10000,
+        "output": False,
+        "phase": "disabled",
+        "deadline": 0.0,
+    }
+    manager._button_samples = {"system_toggle": (False, 0.0)}
+    manager._button_stable = {"system_toggle": False}
+    manager._publish_state(now=1.0)
+    assert manager._cip_master_enabled is True
+
+    manager.inputs["system_toggle"].value = True
+    manager._publish_state(now=2.0)
+    assert manager._cip_master_enabled is False
+
+    manager.inputs["system_toggle"].value = False
+    manager._publish_state(now=3.0)
+    assert manager._cip_master_enabled is False
+
+    manager.inputs["system_toggle"].value = True
+    manager._publish_state(now=4.0)
+    assert manager._cip_master_enabled is True
+
+
 def main():
     cfg = {"cip": {
         "gutting_left": {"pin": 17, "on_ms": 200, "off_ms": 8000},

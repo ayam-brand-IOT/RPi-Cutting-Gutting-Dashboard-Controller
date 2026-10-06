@@ -25,6 +25,7 @@ class GPIOManager(threading.Thread):
         self._button_samples = {}
         self._button_stable = {}
         self._people_counts = {"left": 0, "right": 0}
+        self._cip_master_enabled = True
 
         for name, item in config.get("cip", {}).items():
             durations = {}
@@ -119,6 +120,19 @@ class GPIOManager(threading.Thread):
             )
             self._write(channel, False)
 
+    def _toggle_cip_master(self):
+        self._cip_master_enabled = not self._cip_master_enabled
+        if not self._cip_master_enabled:
+            for channel in self.channels.values():
+                if channel["output"]:
+                    self._write(channel, False)
+                channel.update(phase="disabled", deadline=0.0)
+            return
+        for channel in self.channels.values():
+            if channel["enable"] and channel["phase"] == "disabled":
+                channel.update(phase="on", deadline=time.monotonic() + channel["on_ms"] / 1000.0)
+                self._write(channel, True)
+
     def _apply_commands(self, now: float):
         while True:
             try:
@@ -127,7 +141,7 @@ class GPIOManager(threading.Thread):
                 return
             channel = self.channels[command["name"]]
             channel.update(command["values"])
-            if not channel["enable"]:
+            if not channel["enable"] or not self._cip_master_enabled:
                 self._write(channel, False)
                 channel.update(phase="disabled", deadline=0.0)
             else:
@@ -136,6 +150,12 @@ class GPIOManager(threading.Thread):
                 channel.update(phase="on", deadline=now + channel["on_ms"] / 1000.0)
 
     def _run_cycles(self, now: float):
+        if not self._cip_master_enabled:
+            for channel in self.channels.values():
+                if channel["output"]:
+                    self._write(channel, False)
+                channel.update(phase="disabled", deadline=0.0)
+            return
         for channel in self.channels.values():
             if not channel["enable"]:
                 continue
@@ -157,7 +177,18 @@ class GPIOManager(threading.Thread):
         for name, device in self.inputs.items():
             value = bool(device.value)
             cfg = self.input_cfg[name]
-            if cfg.get("people_side") in ("left", "right"):
+            if cfg.get("cip_toggle"):
+                previous = self._button_samples.get(name)
+                if previous is None or previous[0] != value:
+                    self._button_samples[name] = (value, now)
+                if now - self._button_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
+                    stable = self._button_stable.get(name)
+                    self._button_stable[name] = value
+                    if stable is False and value:
+                        self._toggle_cip_master()
+                if name in self._button_stable:
+                    values[name] = self._button_stable[name]
+            elif cfg.get("people_side") in ("left", "right"):
                 previous = self._button_samples.get(name)
                 if previous is None or previous[0] != value:
                     self._button_samples[name] = (value, now)
