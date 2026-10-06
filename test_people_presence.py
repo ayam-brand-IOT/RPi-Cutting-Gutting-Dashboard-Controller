@@ -110,7 +110,7 @@ class PresenceTests(unittest.TestCase):
     def test_setup_uses_external_high_logic(self):
         with patch.object(gpio_manager, "DigitalInputDevice") as inp, patch.object(gpio_manager, "DigitalOutputDevice"):
             self.manager._setup()
-            self.assertEqual(inp.call_count, 4)
+            self.assertEqual(inp.call_count, 6)
             for call in inp.call_args_list:
                 self.assertIsNone(call.kwargs["pull_up"])
                 self.assertTrue(call.kwargs["active_state"])

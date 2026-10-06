@@ -692,8 +692,8 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 | IN | 7 | 26 | Libre / SPI0 CE1 |
 | IN | 8 | 24 | People RIGHT + / SPI0 CE0 |
 | IN | 9 | 21 | People RIGHT - / SPI0 MISO |
-| IN | 10 | 19 | Libre / SPI0 MOSI |
-| IN | 11 | 23 | Libre / SPI0 SCLK |
+| IN | 10 | 19 | Bouton CIP (NO) / SPI0 MOSI |
+| IN | 11 | 23 | Bouton admission eau (NO) / SPI0 SCLK |
 | IN | 12 | 32 | Cutting motors ON - reserve, desactive |
 | IN | 13 | 33 | Cutting motors TRIP - reserve, desactive |
 | IN | 16 | 36 | Libre |
@@ -701,8 +701,8 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 | OUT | 18 | 12 | CIP CUTTING |
 | OUT | 19 | 35 | CIP RIGHT |
 | OUT | 20 | 38 | CIP Water Intake |
-| OUT | 21 | 40 | Libre |
-| OUT | 22 | 15 | Libre |
+| OUT | 21 | 40 | LED bouton CIP |
+| OUT | 22 | 15 | LED bouton admission eau |
 | OUT | 23 | 16 | Libre |
 | OUT | 24 | 18 | Libre |
 | OUT | 25 | 22 | Libre |
@@ -884,7 +884,13 @@ the device, alongside `holding_registers`, not inside it.
 
 ### Water Intake CIP
 
-Water Intake (water admission) uses CP-IO22 **BCM GPIO20**, physical header pin 38. Like the other CIP channels, it defaults to enabled, 2 s ON / 10 s OFF. Configure `gpio.cip.water_intake` in `config.yaml`. All dashboard variants and both Ecava pages expose the fourth channel.
+Water Intake (water admission) uses CP-IO22 **BCM GPIO20**, physical header pin 38. Its cycle remains 2 s ON / 10 s OFF, configured in `gpio.cip.water_intake` in `config.yaml`. All dashboard variants and both Ecava pages expose the fourth channel.
+
+The normally-open button on **BCM10** starts/stops the three cleaning channels (17/18/19); the normally-open button on **BCM11** independently starts/stops Water Intake (20). Both groups start OFF after every application restart and require a released button followed by a debounced press. Holding a button does not repeat. Starting begins with a full ON phase; stopping closes the group's valves immediately after debounce. Each channel retains its independent ON/OFF durations.
+
+The button LEDs on **BCM21** (cleaning) and **BCM22** (water) stay lit while the corresponding button authorization is ON, including during the OFF phase of the cycles. Configure the groups and LEDs under `gpio.toggle_groups`. Output polarity is set to `active_high: false` for valves and `led_active_high: false` for LEDs to compensate the reported inverted wiring. Each polarity can be changed independently if the physical wiring differs. Inputs remain active-high with external conditioning and 0.2 s debounce.
+
+Channel `enable: true` permits cycling but cannot bypass the physical button authorization, including when sent through MQTT/Ecava. Button authorizations are published as `rpi.gpio.cleaning_enabled` and `rpi.gpio.water_enabled`. They are not persisted. LED state represents this authorization; disabling individual channels remotely does not reset the button latch. Configuration changes require an application restart.
 
 State: `rpi.cip.water_intake` in the retained SCADA state JSON. Command on `factory/cutting-gutting/scada/command`: `{ "target": "cip", "device": "water_intake", "parameters": { "enable": 1, "on_ms": 2000, "off_ms": 10000 } }`. Direct commands also use `factory/cutting-gutting/cip/water_intake/set`. Ecava operator values are seconds; MQTT uses milliseconds.
 

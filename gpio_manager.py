@@ -26,6 +26,9 @@ class GPIOManager(threading.Thread):
         self._button_stable = {}
         self._people_counts = {"left": 0, "right": 0}
         self._cip_master_enabled = True
+        self.toggle_groups = config.get("toggle_groups", {})
+        # Physical button authorizations are never restored after a restart.
+        self._group_enabled = {name: False for name in self.toggle_groups}
 
         for name, item in config.get("cip", {}).items():
             durations = {}
@@ -52,6 +55,43 @@ class GPIOManager(threading.Thread):
                 "phase": "disabled",
                 "deadline": 0.0,
             }
+
+        self._channel_groups = {}
+        output_pins = [channel["pin"] for channel in self.channels.values()]
+        for group, item in self.toggle_groups.items():
+            for name in item["channels"]:
+                if name not in self.channels or name in self._channel_groups:
+                    raise ValueError(f"Invalid or duplicate button channel: {name}")
+                self._channel_groups[name] = group
+            output_pins.append(int(item["led_pin"]))
+        if len(output_pins) != len(set(output_pins)):
+            raise ValueError("Duplicate output pin")
+        if any(pin not in range(17, 28) for pin in output_pins):
+            raise ValueError("Not a CP-IO22 output pin")
+        for item in self.input_cfg.values():
+            if "toggle_group" in item and item["toggle_group"] not in self.toggle_groups:
+                raise ValueError("Unknown button toggle group")
+
+    def _channel_allowed(self, name):
+        group = self._channel_groups.get(name)
+        return (self._cip_master_enabled and self.channels[name]["enable"]
+                and (group is None or self._group_enabled[group]))
+
+    def _toggle_group(self, group, now):
+        self._group_enabled[group] = not self._group_enabled[group]
+        for name in self.toggle_groups[group]["channels"]:
+            channel = self.channels[name]
+            active = self._channel_allowed(name)
+            self._write(channel, active)
+            channel.update(phase="on" if active else "disabled",
+                           deadline=now + channel["on_ms"] / 1000.0 if active else 0.0)
+        self._sync_leds()
+
+    def _sync_leds(self):
+        for group, item in self.toggle_groups.items():
+            pin = int(item["led_pin"])
+            if pin in self.outputs:
+                self.outputs[pin].value = self._group_enabled[group] and self._cip_master_enabled
 
     def enqueue_cip(self, name: str, values: dict):
         if name not in self.channels:
@@ -120,6 +160,13 @@ class GPIOManager(threading.Thread):
             )
             self._write(channel, False)
 
+        for item in self.toggle_groups.values():
+            self.outputs[int(item["led_pin"])] = DigitalOutputDevice(
+                int(item["led_pin"]),
+                active_high=bool(item.get("led_active_high", True)),
+                initial_value=False,
+            )
+
     def _toggle_cip_master(self):
         self._cip_master_enabled = not self._cip_master_enabled
         if not self._cip_master_enabled:
@@ -128,8 +175,8 @@ class GPIOManager(threading.Thread):
                     self._write(channel, False)
                 channel.update(phase="disabled", deadline=0.0)
             return
-        for channel in self.channels.values():
-            if channel["enable"] and channel["phase"] == "disabled":
+        for name, channel in self.channels.items():
+            if self._channel_allowed(name) and channel["phase"] == "disabled":
                 channel.update(phase="on", deadline=time.monotonic() + channel["on_ms"] / 1000.0)
                 self._write(channel, True)
 
@@ -141,7 +188,7 @@ class GPIOManager(threading.Thread):
                 return
             channel = self.channels[command["name"]]
             channel.update(command["values"])
-            if not channel["enable"] or not self._cip_master_enabled:
+            if not self._channel_allowed(command["name"]):
                 self._write(channel, False)
                 channel.update(phase="disabled", deadline=0.0)
             else:
@@ -156,8 +203,11 @@ class GPIOManager(threading.Thread):
                     self._write(channel, False)
                 channel.update(phase="disabled", deadline=0.0)
             return
-        for channel in self.channels.values():
-            if not channel["enable"]:
+        for name, channel in self.channels.items():
+            if not self._channel_allowed(name):
+                if channel["output"]:
+                    self._write(channel, False)
+                channel.update(phase="disabled", deadline=0.0)
                 continue
             if channel["phase"] == "disabled":
                 self._write(channel, True)
@@ -177,7 +227,7 @@ class GPIOManager(threading.Thread):
         for name, device in self.inputs.items():
             value = bool(device.value)
             cfg = self.input_cfg[name]
-            if cfg.get("cip_toggle"):
+            if cfg.get("cip_toggle") or cfg.get("toggle_group"):
                 previous = self._button_samples.get(name)
                 if previous is None or previous[0] != value:
                     self._button_samples[name] = (value, now)
@@ -185,7 +235,10 @@ class GPIOManager(threading.Thread):
                     stable = self._button_stable.get(name)
                     self._button_stable[name] = value
                     if stable is False and value:
-                        self._toggle_cip_master()
+                        if cfg.get("toggle_group"):
+                            self._toggle_group(cfg["toggle_group"], now)
+                        else:
+                            self._toggle_cip_master()
                 if name in self._button_stable:
                     values[name] = self._button_stable[name]
             elif cfg.get("people_side") in ("left", "right"):
@@ -225,6 +278,9 @@ class GPIOManager(threading.Thread):
             }
             for name, channel in self.channels.items()
         }
+        self._sync_leds()
+        for group in self.toggle_groups:
+            values[group + "_enabled"] = self._group_enabled[group] and self._cip_master_enabled
         self.state.update_gpio(values, cip, people_counts=people)
 
     def run(self):
@@ -246,5 +302,7 @@ class GPIOManager(threading.Thread):
                 pin = channel["pin"]
                 if pin in self.outputs:
                     self._write(channel, False)
+            for output in self.outputs.values():
+                output.value = False
             for device in (*self.inputs.values(), *self.outputs.values()):
                 device.close()

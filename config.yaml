@@ -59,19 +59,27 @@ gpio:
   inputs:
     people_left_plus:   {enabled: true, pin: 4, pull_up: null, active_low: false, people_side: left, people_delta: 1, debounce_s: 0.1}
     people_left_minus:  {enabled: true, pin: 5, pull_up: null, active_low: false, people_side: left, people_delta: -1, debounce_s: 0.1}
-    system_run_toggle:  {enabled: true, pin: 6, pull_up: null, active_low: false, cip_toggle: true, debounce_s: 0.2}
+    system_run_toggle:  {enabled: true, pin: 10, pull_up: null, active_low: false, toggle_group: cleaning, debounce_s: 0.2}
+    water_run_toggle:   {enabled: true, pin: 11, pull_up: null, active_low: false, toggle_group: water, debounce_s: 0.2}
     people_right_plus:  {enabled: true, pin: 8, pull_up: null, active_low: false, people_side: right, people_delta: 1, debounce_s: 0.1}
     people_right_minus: {enabled: true, pin: 9, pull_up: null, active_low: false, people_side: right, people_delta: -1, debounce_s: 0.1}
     # Reserved real input pins; keep disabled until motor feedback is wired.
     cutting_motors_on:   {enabled: false, pin: 12, pull_up: null, active_low: false}
     cutting_motors_trip: {enabled: false, pin: 13, pull_up: null, active_low: false}
     # BCM16 remains spare. BCM17/18/19/20 are the CIP outputs.
+  # Both groups start OFF; one press starts, the next stops.
+  # Active-low outputs compensate the inverted CP-IO22 wiring.
+  # LEDs follow the button latch, not the ON/OFF cycle phase.
+  toggle_groups:
+    cleaning: {channels: [gutting_left, cutting, gutting_right], led_pin: 21, led_active_high: false}
+    water: {channels: [water_intake], led_pin: 22, led_active_high: false}
   # CIP durations in SECONDS (s): 2 s ON, 10 s OFF. Decimals allowed.
+  # enable permits a channel to run AFTER its group button is pressed.
   cip:
-    gutting_left:  {pin: 17, active_high: true, enable: true, on_s: 2, off_s: 10}
-    cutting:       {pin: 18, active_high: true, enable: true, on_s: 2, off_s: 10}
-    gutting_right: {pin: 19, active_high: true, enable: true, on_s: 2, off_s: 10}
-    water_intake:  {pin: 20, active_high: true, enable: true, on_s: 2, off_s: 10}
+    gutting_left:  {pin: 17, active_high: false, enable: true, on_s: 2, off_s: 10}
+    cutting:       {pin: 18, active_high: false, enable: true, on_s: 2, off_s: 10}
+    gutting_right: {pin: 19, active_high: false, enable: true, on_s: 2, off_s: 10}
+    water_intake:  {pin: 20, active_high: false, enable: true, on_s: 2, off_s: 10}
 
 # Profils de lecture uniquement : aucun slave supplémentaire créé.
 # Adresses logiques utilisées directement dans pymodbus, sans soustraire 1.
