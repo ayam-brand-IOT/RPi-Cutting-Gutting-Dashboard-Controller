@@ -60,7 +60,7 @@ gpio:
   # No internal pull: the CP-IO22 provides the input conditioning.
   inputs:
     people_left_plus:   {enabled: true, pin: 4, pull_up: null, active_low: false, people_side: left, people_delta: 1, debounce_s: 0.1}
-    people_left_minus:  {enabled: true, pin: 5, pull_up: null, active_low: false, people_side: left, people_delta: -1, debounce_s: 0.1}
+    people_left_minus:  {enabled: true, pin: 6, pull_up: null, active_low: false, people_side: left, people_delta: -1, debounce_s: 0.1}
     system_run_toggle:  {enabled: true, pin: 10, pull_up: null, active_low: false, toggle_group: cleaning, debounce_s: 0.2}
     water_run_toggle:   {enabled: true, pin: 11, pull_up: null, active_low: false, toggle_group: water, debounce_s: 0.2}
     people_right_plus:  {enabled: true, pin: 8, pull_up: null, active_low: false, people_side: right, people_delta: 1, debounce_s: 0.1}
