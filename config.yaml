@@ -51,6 +51,8 @@ schedule:
   
 gpio:
   enabled: true
+  # Temporary diagnostics: button samples, latched state and output commands.
+  debug_buttons: true
   disable_waveshare_cip_on_start: true
   # CP-IO22 inputs: BCM4..13, BCM16. Outputs: BCM17..27.
   # Momentary people-count buttons; HIGH means pressed.

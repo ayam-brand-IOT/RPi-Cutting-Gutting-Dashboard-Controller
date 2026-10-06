@@ -12,6 +12,7 @@ from state import StateStore
 class ButtonTests(unittest.TestCase):
     def setUp(self):
         self.cfg = load_config("config.yaml")["gpio"]
+        self.cfg["debug_buttons"] = False
         self.manager = GPIOManager(self.cfg, StateStore([]), threading.Event())
         self.manager.inputs = {name: SimpleNamespace(value=False) for name in
                                ("system_run_toggle", "water_run_toggle")}
@@ -87,6 +88,39 @@ class ButtonTests(unittest.TestCase):
         for call in out.call_args_list:
             self.assertTrue(call.kwargs["active_high"])
             self.assertFalse(call.kwargs["initial_value"])
+
+    def test_latch_and_cycle_are_published_after_release(self):
+        self.press("water_run_toggle")
+        snapshot = self.manager.state.snapshot()["rpi"]
+        self.assertFalse(snapshot["gpio"]["water_run_toggle"])
+        self.assertTrue(snapshot["gpio"]["water_enabled"])
+        self.assertTrue(snapshot["cip"]["water_intake"]["output"])
+        deadline = self.manager.channels["water_intake"]["deadline"]
+        self.manager._run_cycles(deadline)
+        self.manager._publish_state(deadline)
+        snapshot = self.manager.state.snapshot()["rpi"]
+        self.assertTrue(snapshot["gpio"]["water_enabled"])
+        self.assertEqual(snapshot["cip"]["water_intake"]["phase"], "off")
+        self.assertFalse(snapshot["cip"]["water_intake"]["output"])
+
+    def test_diagnostics_distinguish_sample_from_latch_and_output(self):
+        self.cfg["debug_buttons"] = True
+        with patch("builtins.print") as output:
+            self.press("water_run_toggle")
+        messages = [call.args[0] for call in output.call_args_list]
+        self.assertTrue(any("pin=11 sampled=1" in message for message in messages))
+        self.assertTrue(any("group=water latched=1" in message for message in messages))
+        self.assertTrue(any("valve pin=20 commanded=ON" in message for message in messages))
+        self.assertTrue(any("LED pin=22 commanded=ON" in message for message in messages))
+
+    def test_missing_inputs_are_not_reported_online(self):
+        self.manager.inputs = {}
+        with patch("builtins.print") as output:
+            self.manager._report_setup()
+        messages = [call.args[0] for call in output.call_args_list]
+        self.assertIn("DEGRADED", messages[0])
+        self.assertIn("inputs=0/6", messages[0])
+        self.assertIn("system_run_toggle", messages[1])
 
 
 if __name__ == "__main__":

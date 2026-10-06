@@ -29,6 +29,7 @@ class GPIOManager(threading.Thread):
         self.toggle_groups = config.get("toggle_groups", {})
         # Physical button authorizations are never restored after a restart.
         self._group_enabled = {name: False for name in self.toggle_groups}
+        self._led_commands = {}
 
         for name, item in config.get("cip", {}).items():
             durations = {}
@@ -72,6 +73,21 @@ class GPIOManager(threading.Thread):
             if "toggle_group" in item and item["toggle_group"] not in self.toggle_groups:
                 raise ValueError("Unknown button toggle group")
 
+    def _trace(self, message):
+        if self.config.get("debug_buttons", False):
+            print(f"[GPIO DEBUG] {message}", flush=True)
+
+    def _report_setup(self):
+        expected = {name for name, cfg in self.input_cfg.items() if cfg.get("enabled", True)}
+        missing = sorted(expected - self.inputs.keys())
+        status = "DEGRADED" if missing else "ONLINE"
+        pins = "/".join(str(channel["pin"]) for channel in self.channels.values())
+        print(f"[GPIO] CP-IO22 {status} via gpiozero — CIP sur GPIO{pins}; "
+              f"inputs={len(expected) - len(missing)}/{len(expected)}", flush=True)
+        if missing:
+            print(f"[GPIO] INPUTS UNAVAILABLE: {', '.join(missing)}. "
+                  "These buttons cannot be read; check the GPIO driver and permissions.", flush=True)
+
     def _channel_allowed(self, name):
         group = self._channel_groups.get(name)
         return (self._cip_master_enabled and self.channels[name]["enable"]
@@ -79,6 +95,7 @@ class GPIOManager(threading.Thread):
 
     def _toggle_group(self, group, now):
         self._group_enabled[group] = not self._group_enabled[group]
+        self._trace(f"group={group} latched={int(self._group_enabled[group])}")
         for name in self.toggle_groups[group]["channels"]:
             channel = self.channels[name]
             active = self._channel_allowed(name)
@@ -91,7 +108,11 @@ class GPIOManager(threading.Thread):
         for group, item in self.toggle_groups.items():
             pin = int(item["led_pin"])
             if pin in self.outputs:
-                self.outputs[pin].value = self._group_enabled[group] and self._cip_master_enabled
+                active = self._group_enabled[group] and self._cip_master_enabled
+                self.outputs[pin].value = active
+                if self._led_commands.get(pin) != active:
+                    self._trace(f"LED pin={pin} commanded={'ON' if active else 'OFF'}")
+                    self._led_commands[pin] = active
 
     def enqueue_cip(self, name: str, values: dict):
         if name not in self.channels:
@@ -120,6 +141,8 @@ class GPIOManager(threading.Thread):
 
     def _write(self, channel: dict, active: bool):
         self.outputs[channel["pin"]].value = bool(active)
+        if channel["output"] != active:
+            self._trace(f"valve pin={channel['pin']} commanded={'ON' if active else 'OFF'}")
         channel["output"] = active
 
     def _setup(self):
@@ -230,10 +253,13 @@ class GPIOManager(threading.Thread):
             if cfg.get("cip_toggle") or cfg.get("toggle_group"):
                 previous = self._button_samples.get(name)
                 if previous is None or previous[0] != value:
+                    self._trace(f"input={name} pin={cfg['pin']} sampled={int(value)}")
                     self._button_samples[name] = (value, now)
                 if now - self._button_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
                     stable = self._button_stable.get(name)
                     self._button_stable[name] = value
+                    if stable != value:
+                        self._trace(f"input={name} debounced={int(value)}")
                     if stable is False and value:
                         if cfg.get("toggle_group"):
                             self._toggle_group(cfg["toggle_group"], now)
@@ -286,8 +312,12 @@ class GPIOManager(threading.Thread):
     def run(self):
         try:
             self._setup()
-            pins = "/".join(str(channel["pin"]) for channel in self.channels.values())
-            print(f"[GPIO] CP-IO22 ONLINE via gpiozero — CIP sur GPIO{pins}", flush=True)
+            self._report_setup()
+            for group, item in self.toggle_groups.items():
+                buttons = [f"{name}@{cfg['pin']}" for name, cfg in self.input_cfg.items()
+                           if cfg.get("toggle_group") == group and name in self.inputs]
+                self._trace(f"group={group} buttons={buttons} channels={item['channels']} "
+                            f"led_pin={item['led_pin']} latched=0")
             while not self.stop_event.is_set():
                 now = time.monotonic()
                 self._apply_commands(now)
