@@ -12,7 +12,7 @@ Pour tester en parallèle avec main.py, utilise un port série virtuel :
 Exemple : /dev/pts/3 dans CE simulateur, /dev/pts/4 comme modbus_port dans
 config.yaml pour main.py.
 
-Nécessite : python -m pip install -r requirements-simulator.txt
+Nécessite : python -m pip install -r requirements.txt
 """
 
 import asyncio
@@ -36,7 +36,7 @@ except ImportError:
 if not hasattr(_DeviceCtx, "getValues"):
     raise RuntimeError(
         "Version PyModbus incompatible avec le simulateur. "
-        "Installer les dépendances avec: python -m pip install -r requirements-simulator.txt"
+        "Installer une version de pymodbus compatible avec getValues/setValues."
     )
 
 from config_loader import load_config
@@ -53,8 +53,11 @@ def make_cip_simulator(config):
     manager = GPIOManager(config, StateStore([]), threading.Event())
     manager.outputs = {channel['pin']: SimulatedOutput()
                        for channel in manager.channels.values()}
+    manager.outputs.update({int(item['led_pin']): SimulatedOutput()
+                            for item in manager.toggle_groups.values()})
     manager.inputs = {name: SimulatedOutput() for name, item in config.get('inputs', {}).items()
-                      if item.get('enabled', True) and item.get('people_side') in ('left', 'right')}
+                      if item.get('enabled', True) and
+                      (item.get('people_side') in ('left', 'right') or item.get('toggle_group'))}
     return manager
 
 # Appareils câblés en réel : exclus du simulateur (ni slave, ni onglet).
@@ -308,6 +311,22 @@ def build_gui():
                             command=lambda n=name, v=pressed: setattr(cip_sim.inputs[n], 'value', v.get())).grid(
                                 row=row, column=2 if delta > 0 else 3, padx=8)
 
+    group_indicators = {}
+    group_row = people_row + 4
+    ttk.Label(cip_tab, text='CIP / Water buttons: check to press, uncheck to release').grid(
+        row=group_row, column=0, columnspan=6, sticky='w', pady=(16, 8))
+    for index, (name, item) in enumerate(
+            ((n, c) for n, c in cip_sim.input_cfg.items()
+             if n in cip_sim.inputs and c.get('toggle_group')), start=1):
+        group = item['toggle_group']
+        pressed = tk.BooleanVar(value=False)
+        ttk.Checkbutton(cip_tab, text=f"{group} / GPIO{item['pin']}", variable=pressed,
+                        command=lambda n=name, v=pressed: setattr(cip_sim.inputs[n], 'value', v.get())).grid(
+                            row=group_row + index, column=0, columnspan=2, sticky='w', padx=8)
+        indicator = tk.StringVar(value='OFF')
+        group_indicators[group] = indicator
+        ttk.Label(cip_tab, textvariable=indicator).grid(row=group_row + index, column=2, columnspan=3)
+
     def refresh_cip():
         now = time.monotonic()
         cip_sim._apply_commands(now)
@@ -320,6 +339,9 @@ def build_gui():
         for name, channel in cip_sim.channels.items():
             cip_indicators[name].set('ON' if channel['output'] else
                                      'OFF' if channel['enable'] else 'DISABLED')
+        for group, indicator in group_indicators.items():
+            pin = int(cip_sim.toggle_groups[group]['led_pin'])
+            indicator.set(f"LED GPIO{pin}: {'ON' if cip_sim.outputs[pin].value else 'OFF'}")
         root.after(50, refresh_cip)
 
     root.after(50, refresh_cip)

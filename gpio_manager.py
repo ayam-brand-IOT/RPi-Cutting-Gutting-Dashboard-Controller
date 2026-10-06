@@ -270,12 +270,15 @@ class GPIOManager(threading.Thread):
             elif cfg.get("people_side") in ("left", "right"):
                 previous = self._button_samples.get(name)
                 if previous is None or previous[0] != value:
+                    self._trace(f"input={name} pin={cfg['pin']} sampled={int(value)}")
                     self._button_samples[name] = (value, now)
                 if now - self._button_samples[name][1] >= float(cfg.get("debounce_s", 0.1)):
                     stable = self._button_stable.get(name)
                     self._button_stable[name] = value
                     # A held button at startup is not a press. First release it.
                     if stable is False and value:
+                        self._trace(f"worker pin={cfg['pin']} side={cfg['people_side']} "
+                                    f"accepted_delta={int(cfg['people_delta']):+d}")
                         presses[cfg["people_side"]].append(int(cfg["people_delta"]))
                 if name in self._button_stable:
                     values[name] = self._button_stable[name]
@@ -291,7 +294,10 @@ class GPIOManager(threading.Thread):
                          and {self.input_cfg[name].get("people_delta") for name in names} == {-1, 1})
                 if ready:
                     # Opposite presses in the same sample cancel, even at zero.
+                    before = self._people_counts[side]
                     self._people_counts[side] = max(0, self._people_counts[side] + sum(presses[side]))
+                    if presses[side]:
+                        self._trace(f"workers side={side} count={before}->{self._people_counts[side]}")
                 people[side] = self._people_counts[side] if ready else None
         cip = {
             name: {

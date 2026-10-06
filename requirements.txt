@@ -4,3 +4,4 @@ pyserial>=3.5,<4
 paho-mqtt>=2.0,<3
 PyYAML>=6,<7
 gpiozero>=2,<3
+lgpio==0.2.2.0; sys_platform == "linux" and (platform_machine == "armv6l" or platform_machine == "armv7l" or platform_machine == "aarch64")

@@ -1,8 +1,8 @@
-// Test both deployed HTML sources with real SCADA JSON-shaped input.
+// Test this repository by default; pass additional HTML paths explicitly.
 const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert');
-const paths = ['web-ecava/ecava_machine_control.html', '../Fish-AWS/ecava_machine_control.html'];
+const paths = ['web-ecava/ecava_machine_control.html', ...process.argv.slice(2)];
 for (const path of paths) {
   const html = fs.readFileSync(path, 'utf8');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];

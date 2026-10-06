@@ -668,7 +668,7 @@ four-person limit. Opposite presses accepted in the same sample cancel.
 
 Configure `people_side`, `people_delta` (+1/-1) and `debounce_s` in `gpio.inputs`.
 HIGH means pressed (`pull_up: null`, `active_low: false`); set `active_low: true`
-if the field signal is inverted. GPIO6/7/10/11/16 are spare; GPIO12/13 reserve
+if the field signal is inverted. GPIO6/7/16 are spare; GPIO10/11 are the CIP/water buttons; GPIO12/13 reserve
 cutting motor feedback. GPIO17/18/19/20 remain CIP outputs.
 
 The existing `rpi.people_gpio` (left/right) and `rpi.people_gpio_total` state fields
@@ -897,3 +897,11 @@ Channel `enable: true` permits cycling but cannot bypass the physical button aut
 State: `rpi.cip.water_intake` in the retained SCADA state JSON. Command on `factory/cutting-gutting/scada/command`: `{ "target": "cip", "device": "water_intake", "parameters": { "enable": 1, "on_ms": 2000, "off_ms": 10000 } }`. Direct commands also use `factory/cutting-gutting/cip/water_intake/set`. Ecava operator values are seconds; MQTT uses milliseconds.
 
 The simulator CP-IO22 tab runs local CIP cycles, including Water Intake, without physical GPIO or an additional Modbus slave. These local cycles do not control or publish to the real Raspberry Pi.
+
+The simulator starts both groups OFF, like the controller. Its CIP/water button checkboxes simulate a held press: check for at least 0.2 s, then uncheck to release. Repeat to stop. LED indicators show the latched authorization. `simulator.exe` is a prebuilt artifact and must be rebuilt to include source changes.
+
+For button diagnostics, set `gpio.debug_buttons: true`. Logs show sampled inputs, accepted worker deltas and resulting counts, group latches, and output commands. They do not measure valve or LED feedback. Set it to false after troubleshooting to reduce logs. An input initialization failure is reported as `DEGRADED` with the missing input names.
+
+For an isolated Raspberry Pi virtual environment, `requirements.txt` includes `lgpio` on ARM Linux. Verify with `python3 -c "import lgpio; print('lgpio OK')"` and start with `GPIOZERO_PIN_FACTORY=lgpio python3 main.py`. The system-package installation described above remains an alternative.
+
+Local checks: `python -m unittest discover`, plus `python test_config.py`, `python test_gpio.py`, `python test_mqtt_scada.py`, `python test_weather.py`, and `node test_vfd_ecava.js`. The presence tests need pygame; `test_modbus_slave.py` is a separate manual hardware diagnostic and only opens the serial port when executed directly. To check another Ecava copy, pass its HTML path to the Node command.
