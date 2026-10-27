@@ -143,4 +143,5 @@ class PresenceTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    print("SIMULATED TESTS: no physical GPIO is read. For real buttons, run diagnose_people_gpio.py.", flush=True)
     unittest.main()
