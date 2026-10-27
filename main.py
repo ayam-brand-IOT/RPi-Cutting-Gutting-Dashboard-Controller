@@ -34,6 +34,7 @@ def main():
         from dashboard_old import run_dashboard as dashboard_runner
 
     cfg = load_config(args.config)
+    print(f"[CONFIG] {Path(args.config).resolve()}", flush=True)
     cfg["devices"] = {
         name: device
         for name, device in cfg["devices"].items()

@@ -39,7 +39,7 @@ class PresenceTests(unittest.TestCase):
         self.sample(name, False)
 
     def test_pinout(self):
-        self.assertEqual([self.cfg["inputs"][n]["pin"] for n in self.names], [4, 5, 8, 9])
+        self.assertEqual([self.cfg["inputs"][n]["pin"] for n in self.names], [4, 6, 8, 9])
         self.assertEqual([self.cfg["inputs"][n]["people_delta"] for n in self.names], [1, -1, 1, -1])
         self.assertEqual({c["pin"] for c in self.cfg["cip"].values()}, {17, 18, 19, 20})
 
@@ -56,6 +56,25 @@ class PresenceTests(unittest.TestCase):
             self.press("people_right_minus")
         self.assertEqual(self.count("right"), 0)
         self.assertEqual(self.count("left"), 5)
+
+    def test_physical_gpio_routes_and_decrements(self):
+        devices = {}
+        def open_input(pin, **kwargs):
+            devices[pin] = SimpleNamespace(value=False)
+            return devices[pin]
+        with patch.object(gpio_manager, "DigitalInputDevice", side_effect=open_input), patch.object(gpio_manager, "DigitalOutputDevice"):
+            self.manager._setup()
+        self.assertEqual(set(devices), {4, 6, 8, 9})
+        self.sample()
+        def press_pin(pin):
+            devices[pin].value = True
+            self.sample()
+            devices[pin].value = False
+            self.sample()
+        for pin, expected in ((4, (1, 0)), (8, (1, 1)), (8, (1, 2)),
+                              (9, (1, 1)), (6, (0, 1)), (9, (0, 0)), (9, (0, 0))):
+            press_pin(pin)
+            self.assertEqual((self.count("left"), self.count("right")), expected)
 
     def test_hold_and_release_required(self):
         self.sample()

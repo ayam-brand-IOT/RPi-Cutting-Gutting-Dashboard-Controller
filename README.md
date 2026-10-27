@@ -657,7 +657,7 @@ Use momentary buttons on the CP-IO22 GPIO-labelled INPUT terminals (BCM numberin
 
 | Side | Add one person (+) | Remove one person (-) |
 |---|---|---|
-| LEFT | GPIO4 | GPIO5 |
+| LEFT | GPIO4 | GPIO6 |
 | RIGHT | GPIO8 | GPIO9 |
 
 Each side has an internal counter, starting at **zero on application restart**.
@@ -668,7 +668,7 @@ four-person limit. Opposite presses accepted in the same sample cancel.
 
 Configure `people_side`, `people_delta` (+1/-1) and `debounce_s` in `gpio.inputs`.
 HIGH means pressed (`pull_up: null`, `active_low: false`); set `active_low: true`
-if the field signal is inverted. GPIO6/7/10/11/16 are spare; GPIO12/13 reserve
+if the field signal is inverted. GPIO5/7/10/11/16 are spare; GPIO12/13 reserve
 cutting motor feedback. GPIO17/18/19/20 remain CIP outputs.
 
 The existing `rpi.people_gpio` (left/right) and `rpi.people_gpio_total` state fields
@@ -687,8 +687,8 @@ Reperer physiquement la broche 1 avant toute lecture du tableau.
 | I/O CP-IO22 | GPIO BCM (`pin:`) | Broche physique RPi J8 | Affectation |
 |---|---:|---:|---|
 | IN | 4 | 7 | People LEFT + |
-| IN | 5 | 29 | People LEFT - |
-| IN | 6 | 31 | Libre |
+| IN | 5 | 29 | Libre |
+| IN | 6 | 31 | People LEFT - |
 | IN | 7 | 26 | Libre / SPI0 CE1 |
 | IN | 8 | 24 | People RIGHT + / SPI0 CE0 |
 | IN | 9 | 21 | People RIGHT - / SPI0 MISO |
@@ -889,3 +889,15 @@ Water Intake (water admission) uses CP-IO22 **BCM GPIO20**, physical header pin 
 State: `rpi.cip.water_intake` in the retained SCADA state JSON. Command on `factory/cutting-gutting/scada/command`: `{ "target": "cip", "device": "water_intake", "parameters": { "enable": 1, "on_ms": 2000, "off_ms": 10000 } }`. Direct commands also use `factory/cutting-gutting/cip/water_intake/set`. Ecava operator values are seconds; MQTT uses milliseconds.
 
 The simulator CP-IO22 tab runs local CIP cycles, including Water Intake, without physical GPIO or an additional Modbus slave. These local cycles do not control or publish to the real Raspberry Pi.
+
+### Diagnose people-count buttons
+
+The current mapping is GPIO4 = LEFT +, GPIO6 = LEFT -, GPIO8 = RIGHT +,
+GPIO9 = RIGHT - (BCM numbering). GPIO5 is unused. Restart the supervisor after
+updating its configuration. Startup logs show the absolute configuration path
+and each successfully opened button's GPIO, side, and delta. Accepted presses
+log the GPIO and updated left/right counters. Use `journalctl -u machine-supervisor.service -f`
+(or the installed service name) while pressing one button at a time. If GPIO9
+is logged as RIGHT - but the left count changes on screen, compare the published
+`rpi.people_gpio` with the display. If another GPIO is logged, check the wiring
+and the configuration path shown at startup.

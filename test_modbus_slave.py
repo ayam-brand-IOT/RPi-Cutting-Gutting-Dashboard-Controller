@@ -4,6 +4,7 @@ Test Modbus RTU en boucle - HAT RS485 Waveshare -> ESP32-S3 8DI8DO
 Fish Cutting/Gutting Controller
 """
 
+from inspect import signature
 from pymodbus.client import ModbusSerialClient
 import time
 
@@ -17,6 +18,9 @@ client = ModbusSerialClient(
 )
 
 DEVICE_ID = 3
+# Selon la version de pymodbus 3.x, l'adresse s'appelle slave ou device_id.
+DEVICE_KEY = "device_id" if "device_id" in signature(client.read_input_registers).parameters else "slave"
+DEVICE_ARGS = {DEVICE_KEY: DEVICE_ID}
 
 if not client.connect():
     print("Impossible d'ouvrir le port série")
@@ -27,7 +31,7 @@ print("Port ouvert, lecture en boucle (Ctrl+C pour arrêter)...\n")
 try:
     while True:
         # Input registers 0..18 (télémétrie complète)
-        rr = client.read_input_registers(address=0, count=19, device_id=DEVICE_ID)
+        rr = client.read_input_registers(address=0, count=19, **DEVICE_ARGS)
         if rr.isError():
             print("Erreur input registers:", rr)
         else:
@@ -45,12 +49,12 @@ try:
             print(f"FW version      : {hex(regs[18])}")
 
         # Discrete inputs (DI1..DI8)
-        di = client.read_discrete_inputs(address=0, count=8, device_id=DEVICE_ID)
+        di = client.read_discrete_inputs(address=0, count=8, **DEVICE_ARGS)
         if not di.isError():
             print(f"DI1-DI8         : {di.bits[:8]}")
 
         # Coils (EJECT_ENABLE, CIP_ENABLE, ALARM_ACK)
-        co = client.read_coils(address=0, count=3, device_id=DEVICE_ID)
+        co = client.read_coils(address=0, count=3, **DEVICE_ARGS)
         if not co.isError():
             print(f"Coils           : eject={co.bits[0]} cip={co.bits[1]} ack={co.bits[2]}")
 

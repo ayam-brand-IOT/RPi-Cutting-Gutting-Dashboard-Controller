@@ -104,6 +104,10 @@ class GPIOManager(threading.Thread):
                 if pull_up is None:
                     kwargs["active_state"] = not item.get("active_low", False)
                 self.inputs[name] = DigitalInputDevice(int(item["pin"]), **kwargs)
+                if item.get("people_side") in ("left", "right"):
+                    print(f"[PEOPLE] {name}: GPIO{pin} -> {item['people_side'].upper()} "
+                          f"{int(item['people_delta']):+d} (active_low={item.get('active_low', False)})",
+                          flush=True)
             except Exception as error:
                 # Une entrée de monitoring ne doit jamais empêcher les sorties
                 # CIP de sécurité de démarrer.
@@ -154,6 +158,7 @@ class GPIOManager(threading.Thread):
         now = time.monotonic() if now is None else now
         values = {}
         presses = {"left": [], "right": []}
+        pressed_buttons = []
         for name, device in self.inputs.items():
             value = bool(device.value)
             cfg = self.input_cfg[name]
@@ -167,6 +172,7 @@ class GPIOManager(threading.Thread):
                     # A held button at startup is not a press. First release it.
                     if stable is False and value:
                         presses[cfg["people_side"]].append(int(cfg["people_delta"]))
+                        pressed_buttons.append(name)
                 if name in self._button_stable:
                     values[name] = self._button_stable[name]
             else:
@@ -183,6 +189,13 @@ class GPIOManager(threading.Thread):
                     # Opposite presses in the same sample cancel, even at zero.
                     self._people_counts[side] = max(0, self._people_counts[side] + sum(presses[side]))
                 people[side] = self._people_counts[side] if ready else None
+            for name in pressed_buttons:
+                cfg = self.input_cfg[name]
+                side = cfg["people_side"]
+                result = "ignored (inputs unavailable)" if people[side] is None else "accepted"
+                print(f"[PEOPLE] GPIO{cfg['pin']} {name} -> {side.upper()} "
+                      f"{int(cfg['people_delta']):+d} {result}; "
+                      f"left={people['left']} right={people['right']}", flush=True)
         cip = {
             name: {
                 "enable": channel["enable"],
