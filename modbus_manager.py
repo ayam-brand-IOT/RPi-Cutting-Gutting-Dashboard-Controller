@@ -116,6 +116,10 @@ class ModbusManager(threading.Thread):
                 values.update(self._vfd_speed(values, device))
             if device.get("meter_profile") == "acrel_adl400":
                 values.update(self._acrel_values(values))
+            if device.get("meter_profile") == "dae_u_b":
+                info_temperature = values["water_info_temperature_raw"]
+                values["water_info"] = info_temperature >> 8
+                values["water_temperature_c"] = info_temperature & 0xFF
             if "ejector_count_lo" in values:
                 values["ejector_count"] = (
                     values["ejector_count_lo"]
