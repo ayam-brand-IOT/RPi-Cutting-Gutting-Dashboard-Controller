@@ -589,16 +589,23 @@ default address is the last two serial-number digits, according to its datasheet
 Set `devices.water_meter.slave` to the actual address derived from the SN or
 configured on the meter, avoiding addresses already used on this bus.
 U-100B uses US gallons/GPM; U-100BM is the metric display variant.
-The U-100B-specific register table still needs confirmation, so the invented
-float32 registers have been removed. Fill `telemetry_holding_blocks` and
-`telemetry_holding_registers` from that table, or use `input_blocks` and
-`input_registers` if it specifies FC04, before enabling this device. An empty
-telemetry map is rejected rather than reported online.
-The generic reader supports `uint16`, `int16`, `uint32`, `int32`, `float32`,
-`word_order`, `scale`, `offset`, and `decimals`. Once raw register units are
-confirmed, convert gallons to m3 with 0.003785411784 and GPM to L/min with
-3.785411784 (in addition to any raw-register scaling).
-Source: <https://daecontrol.com/wp-content/uploads/2025/09/U-100b-Datasheet-1.6.pdf>.
+The U-b Modbus Reference 1.2b specifies FC03 telemetry with integer data,
+MSW first: flow at 0-1, positive cumulative volume at 2-3, combined
+information/temperature at 6 (high/low byte), pressure at 7 (0.001 MPa), and
+diagnostic code at 8. The working meter script confirms reverse volume at 4-5
+and signed int32 flow at 0-1. Each poll uses one FC03 request with
+`address=0, count=9` (registers 0 through 8); separate requests fail on the
+installed meter. These registers are configured in `config.yaml`.
+The reader also splits register 6 into `water_info` and `water_temperature_c`.
+
+The configured P1 assumption is US gallons/GPM: flow raw x 0.01 GPM x
+3.785411784 gives `flow_l_min`; cumulative raw x 1 US gal x 0.003785411784
+gives `water_total_m3` (and `water_reverse_m3` for reverse volume).
+If P1 is metric, change the respective scales to
+0.016666666666666666 (0.001 m3/h to L/min) and 0.001 (m3).
+Compare against the LCD before enabling `water_meter`; its slave ID must
+match the installed meter. Daily/monthly consumption is not the lifetime total.
+Source: <https://daecontrol.com/wp-content/uploads/2026/06/U-b-Modbus-Reference-1.2b.pdf>.
 
 Ecava shows the meter models and Acrel's cumulative import index.
 The existing MQTT JSON includes the decoded readings without new Ecava tags.

@@ -209,11 +209,11 @@ devices:
   # Acrel ADL400-D, ADL400 manual table 8: FC03, MSW first.
   # Keep disabled until wired and slave/bus settings are confirmed.
   electricity_meter:
-    enabled: false
+    enabled: true
     label: Acrel ADL400-D
     model: ADL400-D
     meter_profile: acrel_adl400
-    slave: 10
+    slave: 11
     type: utility_meter
     telemetry_holding_blocks:
       - {address: 10, count: 2}    # 0x000A: forward/import active energy
@@ -229,17 +229,28 @@ devices:
 
   # DAE U-100B: integrated RS485 Modbus RTU, 9600 baud, 8N1.
   # Native units: US gallons / GPM (U-100BM is the metric variant).
-  # Default slave = last two serial-number digits; 11 is only a proposed ID.
-  # Register map unavailable: do not use the old placeholder float32 addresses.
+  # Default slave = last two serial-number digits; match the installed meter.
+  # U-b Modbus Reference 1.2b: FC03, integer words, MSW first.
   water_meter:
-    enabled: false
+    enabled: true
     label: DAE U-100B
     model: U-100B
-    slave: 11
+    slave: 51
     type: utility_meter
-    telemetry_holding_blocks: []
-    telemetry_holding_registers: {}
-    # Apply after the raw register units/scaling have been confirmed:
-    # 1 US gal = 0.003785411784 m3; 1 GPM = 3.785411784 L/min.
+    meter_profile: dae_u_b
+    # Scaling below assumes P1 = US gallons / GPM. Confirm before enabling.
+    # For metric P1: flow_l_min scale = 0.016666666666666666;
+    # water_total_m3 scale = 0.001.
+    # Read the entire frame every cycle; separate requests fail on this meter.
+    telemetry_holding_blocks:
+      - {address: 0, count: 9}
+    telemetry_holding_registers:
+      flow_l_min: {address: 0, data_type: int32, word_order: big, scale: 0.03785411784, decimals: 3}
+      water_total_m3: {address: 2, data_type: uint32, word_order: big, scale: 0.003785411784, decimals: 6}
+      water_reverse_m3: {address: 4, data_type: uint32, word_order: big, scale: 0.003785411784, decimals: 6}
+      # Combined word: high byte = information, low byte = temperature in deg C.
+      water_info_temperature_raw: {address: 6, data_type: uint16}
+      water_pressure_mpa: {address: 7, data_type: uint16, scale: 0.001, decimals: 3}
+      water_diagnostic_code: {address: 8, data_type: uint16}
     holding_registers: {}
     coils: {}
