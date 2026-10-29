@@ -103,6 +103,25 @@ device_profiles:
 # Toutes les adresses ci-dessous sont des offsets zéro-based pour pymodbus.
 # 0 = 30001 pour Input Register, 0 = 40001 pour Holding Register.
 devices:
+  dehumidifier:
+    enabled: true
+    label: HSCS-380 (15 W)
+    model: HSCS-380-15W
+    type: dehumidifier
+    # Observed on COM14: slave 1, FC03, 9600 8N1. RPi uses the shared bus above.
+    slave: 1
+    # Only 0..3 are used; do not read speculative registers beyond this block.
+    telemetry_holding_blocks:
+      - {address: 0, count: 4}
+    telemetry_holding_registers:
+      humidity_thresholds_raw: {address: 0, data_type: uint16}
+      communication_raw: {address: 1, data_type: uint16}
+      diagnostic_raw: {address: 2, data_type: uint16}
+      temperature_humidity_raw: {address: 3, data_type: uint16}
+    # Read-only: alarm bits and operating state are not confirmed.
+    holding_registers: {}
+    coils: {}
+
   vfd_infeed:
     profile: atv320
     enabled: true

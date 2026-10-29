@@ -10,7 +10,7 @@ for (const path of paths) {
   const elements = {};
   const context = vm.createContext({
     document: {
-      getElementById: id => elements[id] || (elements[id] = {textContent: '', getAttribute: () => null}),
+      getElementById: id => elements[id] || (elements[id] = {textContent: '', getAttribute: () => null, classList: {toggle() {}}}),
       querySelectorAll: () => [],
     },
   });

@@ -114,6 +114,8 @@ class ModbusManager(threading.Thread):
             }
             if device.get("type") == "vfd":
                 values.update(self._vfd_speed(values, device))
+            if device.get("type") == "dehumidifier":
+                values.update(self._dehumidifier_values(values))
             if device.get("meter_profile") == "acrel_adl400":
                 values.update(self._acrel_values(values))
             if device.get("meter_profile") == "dae_u_b":
@@ -138,6 +140,33 @@ class ModbusManager(threading.Thread):
                 )
         except Exception as error:
             self._set_offline(name, error)
+
+    @staticmethod
+    def _dehumidifier_values(values):
+        """HSCS-380 15 W: observed packed bytes; register 2 is not decoded yet."""
+        thresholds = values["humidity_thresholds_raw"]
+        communication = values["communication_raw"]
+        measurement = values["temperature_humidity_raw"]
+        temperature, humidity = measurement >> 8, measurement & 0xFF
+        diagnostic = values["diagnostic_raw"]
+        return {
+            "humidity_start_pct": thresholds >> 8,
+            "humidity_stop_pct": thresholds & 0xFF,
+            "reported_slave": communication >> 8,
+            "baud_code": communication & 0xFF,
+            "baudrate": {0: 2400, 1: 4800, 2: 9600}.get(communication & 0xFF),
+            "temperature_c": temperature if 0 <= temperature <= 100 else None,
+            "humidity_pct": humidity if 0 <= humidity <= 99 else None,
+            # No run state inferred from humidity or the unconfirmed diagnostic.
+            "running": None,
+            "fault_code": None,
+            "alert_level": "warning" if diagnostic else "unknown",
+            "alert_message": (
+                f"Diagnostic register 2 = {diagnostic} (0x{diagnostic:04X}); meaning unconfirmed."
+                if diagnostic else
+                "Diagnostic register 2 = 0; alarm mapping and operating status unconfirmed."
+            ),
+        }
 
     @staticmethod
     def _acrel_values(values):

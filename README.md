@@ -908,3 +908,26 @@ log the GPIO and updated left/right counters. Use `journalctl -u machine-supervi
 is logged as RIGHT - but the left count changes on screen, compare the published
 `rpi.people_gpio` with the display. If another GPIO is logged, check the wiring
 and the configuration path shown at startup.
+
+
+## HSCS-380 dehumidifier (15 W)
+
+`devices.dehumidifier` is enabled at slave 1 on the shared 9600 8N1 bus.
+The Windows commissioning port COM14 is not used on the RPi: polling uses
+`machine.modbus_port` (currently `/dev/serial0`). Ensure slave 1 is unique.
+Read-only FC03 polling reads exactly four words at address 0 every cycle:
+
+- 0: high byte = start humidity H1, low byte = stop humidity H2 (82/70 confirmed).
+- 1: high byte = reported address, low byte = baud code (0/1/2 = 2400/4800/9600).
+- 2: raw diagnostic, possibly an alarm word; its meaning remains unconfirmed.
+- 3: high byte = temperature °C, low byte = humidity % RH, based on field captures.
+
+The collector publishes the original words plus decoded fields in
+`devices.dehumidifier.values` in the existing MQTT SCADA JSON. Fish-AWS and the
+bundled Ecava control page display measurements, thresholds and raw diagnostics.
+No local RPi dashboard card or writable Modbus parameters are added.
+A nonzero diagnostic produces an unconfirmed warning; zero does not certify
+absence of alarms. `running` and `fault_code` remain null until identified.
+An unsuccessful poll sets `connected` false; the Ecava card hides its old values.
+Registers beyond 3 are not polled. No hardware validation has been performed
+by the automated tests; decoding is checked against the supplied captures.

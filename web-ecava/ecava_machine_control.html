@@ -25,6 +25,7 @@
     .control{display:flex;align-items:center;justify-content:flex-end;gap:8px}.switch{position:relative;display:inline-block;flex:0 0 48px;width:48px;height:27px;vertical-align:middle}.switch input{display:none}.switch i{position:absolute;inset:0;border-radius:20px;background:#35475d;cursor:pointer;transition:.18s}.switch i:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;border-radius:50%;background:white;transition:.18s}.switch input:checked+i{background:var(--green)}.switch input:checked+i:before{transform:translateX(21px)}
     .cip-state{display:flex;align-items:center;gap:9px;margin:0 0 13px;padding:10px 12px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:13px}.cip-state .lamp{width:11px;height:11px}
     .value-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(38,56,80,.72);color:var(--muted)}.value-row b{color:var(--text)}
+    .device-alert{margin:12px 0 0;padding:12px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.device-alert.warning{color:var(--amber);background:#40301c}.device-alert.error{color:var(--red);background:#4a2029}
     .ppr-info{display:inline-block;position:relative;margin-left:6px;vertical-align:middle}.info-icon{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;padding:0;border:1px solid var(--blue);border-radius:50%;background:transparent;color:var(--blue);font-size:12px;font-weight:700;cursor:help}.info-icon:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.info-tooltip{display:none;position:absolute;z-index:10;left:-85px;bottom:100%;width:min(280px,75vw);padding:12px;background:#173a5e;border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:12px;font-weight:400;line-height:1.5;box-shadow:var(--shadow)}.ppr-info:hover .info-tooltip,.ppr-info:focus-within .info-tooltip{display:block}
     #toast{position:fixed;z-index:20;right:20px;bottom:20px;max-width:380px;padding:13px 16px;border-radius:11px;background:#173a5e;color:#fff;box-shadow:0 12px 30px #0008;display:none}#toast.error{background:#642631}
     @media(max-width:1100px){.card,.card.wide{grid-column:span 6}.card.small{grid-column:span 6}}@media(max-width:680px){header{align-items:flex-start;flex-direction:column;gap:8px}.card,.card.wide,.card.small{grid-column:1/-1}.setting{grid-template-columns:1fr auto auto}.rpm b{font-size:23px}}
@@ -107,6 +108,20 @@
     </article>
   </section>
 
+  <div class="section-title"><h2>Cabinet climate</h2></div>
+  <section class="grid" aria-label="Cabinet dehumidifier">
+    <article class="card wide" id="dehumidifier-card">
+      <div class="card-head"><h3>Dehumidifier · HSCS-380 (15 W)</h3><span class="badge" id="dehumidifier-connection">UNAVAILABLE</span></div>
+      <div class="value-row"><span>Current humidity</span><b><span id="dehumidifier-humidity">--</span> % RH</b></div>
+      <div class="value-row"><span>Temperature</span><b><span id="dehumidifier-temperature">--</span> °C</b></div>
+      <div class="value-row"><span>Start humidity (H1)</span><b><span id="dehumidifier-start">--</span> % RH</b></div>
+      <div class="value-row"><span>Stop humidity (H2)</span><b><span id="dehumidifier-stop">--</span> % RH</b></div>
+      <div class="value-row"><span>Operating status</span><b id="dehumidifier-status">Unknown</b></div>
+      <div class="value-row"><span>Diagnostic (register 2)</span><b id="dehumidifier-diagnostic">--</b></div>
+      <p id="dehumidifier-alert" class="device-alert" role="status">Waiting for device telemetry.</p>
+    </article>
+  </section>
+
   <div class="section-title"><h2>CIP — CP-IO22</h2><span>Current value + operator command</span></div>
   <section class="grid" id="cipCards"></section>
 
@@ -141,7 +156,26 @@ var PARAMS = [
   {key:'eject_delay',label:'Ejection delay',unit:'ms',min:0,max:9999}, {key:'eject_duration',label:'Ejection duration',unit:'ms',min:10,max:5000}, {key:'eject_enable',label:'Ejector enabled',bool:true},
   {key:'ppr_blade',label:'Blade PPR',unit:'',min:1,max:999}, {key:'ppr_wheel1',label:'Wheel 1 PPR',unit:'',min:1,max:999}, {key:'ppr_wheel2',label:'Wheel 2 PPR',unit:'',min:1,max:999}
 ];
-var latest = {}, apiReady = false;
+var latest = {}, apiReady = false, dehumidifier = null;
+
+// HSCS-380 telemetry: register 2 remains raw until its alarm/status bits are known.
+function renderDehumidifier(){
+  var d=dehumidifier,online=!!(d&&isOn(d.connected)),v=online&&d.values?d.values:{},
+      badge=document.getElementById('dehumidifier-connection'),alert=document.getElementById('dehumidifier-alert'),
+      level=v.alert_level,code=v.fault_code,hasCode=typeof code==='number'&&isFinite(code)&&code>=0&&Math.floor(code)===code,
+      fault=hasCode&&code!==0,message=typeof v.alert_message==='string'?v.alert_message.trim():'',raw=v.diagnostic_raw;
+  badge.textContent=online?'ONLINE':d?'OFFLINE':'UNAVAILABLE';
+  badge.classList.toggle('online',online);
+  document.getElementById('dehumidifier-humidity').textContent=typeof v.humidity_pct==='number'&&isFinite(v.humidity_pct)&&v.humidity_pct>=0&&v.humidity_pct<=100?v.humidity_pct.toFixed(1):'--';
+  document.getElementById('dehumidifier-temperature').textContent=typeof v.temperature_c==='number'&&isFinite(v.temperature_c)&&v.temperature_c>=0&&v.temperature_c<=100?v.temperature_c.toFixed(1):'--';
+  document.getElementById('dehumidifier-status').textContent=!online?'Unknown':fault||level==='error'?'Fault':v.running===true?'Running':v.running===false?'Standby':'Unknown';
+  document.getElementById('dehumidifier-start').textContent=typeof v.humidity_start_pct==='number'&&isFinite(v.humidity_start_pct)&&v.humidity_start_pct>=0&&v.humidity_start_pct<=99?v.humidity_start_pct:'--';
+  document.getElementById('dehumidifier-stop').textContent=typeof v.humidity_stop_pct==='number'&&isFinite(v.humidity_stop_pct)&&v.humidity_stop_pct>=0&&v.humidity_stop_pct<=99?v.humidity_stop_pct:'--';
+  document.getElementById('dehumidifier-diagnostic').textContent=typeof raw==='number'&&isFinite(raw)&&raw>=0&&raw<=65535&&Math.floor(raw)===raw?raw+' ('+hexValue(raw,4)+')':'--';
+  alert.className='device-alert'+(online&&(fault||level==='error')?' error':online&&level==='warning'?' warning':'');
+  alert.textContent=!d?'Waiting for device telemetry.':!online?'Device offline — readings unavailable.':message||(fault?'Device fault (code '+code+').':level==='error'?'Device error reported.':level==='warning'?'Device warning reported.':level==='none'?'No active alerts.':'Alert information unavailable.');
+}
+
 
 function isOn(v){return v===true || v===1 || v==='1' || String(v).toLowerCase()==='true' || String(v).toLowerCase()==='on'}
 function safeValue(v){if(v===undefined||v===null||v===''||v==='unknown')return '--';return v}
@@ -158,6 +192,7 @@ function cipMilliseconds(seconds){
 function consumeState(state){
   var deviceNames=['gutting_left','gutting_right','vision_left','vision_right','electricity_meter','water_meter','vfd_infeed','vfd_pocket'],i,name,d,key,p,cipMap,cip,cipKey,offsets,raw,breaks,input;
   if(!state||typeof state!=='object')throw new Error('Invalid JSON state');
+  dehumidifier=state.devices&&state.devices.dehumidifier||null;
   offsets=state.rpi&&state.rpi.counter_offsets?state.rpi.counter_offsets:{};
   latest.productivity_setpoint_actual=state.rpi&&state.rpi.productivity_setpoint!==undefined?state.rpi.productivity_setpoint:null;
   for(i=0;i<deviceNames.length;i++){
@@ -279,7 +314,7 @@ function writeCommand(key,value,min,max){
     toast('Command failed: '+error.message,true);
   }
 }
-function setApi(ok,text){document.getElementById('apiDot').className=ok?'dot ok':'dot';document.getElementById('apiStatus').textContent=text}
+function setApi(ok,text){document.getElementById('apiDot').className=ok?'dot ok':'dot';document.getElementById('apiStatus').textContent=text;if(!ok){dehumidifier=null;renderDehumidifier()}}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 
 function settingHtml(label,actualKey,cmdKey,min,max,unit,bool){
@@ -302,7 +337,9 @@ function build(){
   var visions=[{id:'left',name:'Left vision',slave:5},{id:'right',name:'Right vision',slave:7}];html='';for(i=0;i<visions.length;i++){c=visions[i];html+='<article class="card wide"><div class="card-head"><h3>'+c.name+'</h3><span class="badge" data-online="vision_'+c.id+'_connected">OFFLINE</span></div><div class="value-row"><span>Fish detected</span><b data-value="vision_'+c.id+'_fish_counter">--</b></div><div class="value-row"><span>Fish ejected</span><b data-value="vision_'+c.id+'_ejected_fish">--</b></div>'+settingHtml('ML model','vision_'+c.id+'_ml_model_actual','vision_'+c.id+'_ml_model_cmd',0,20,'',false)+settingHtml('Ejection enabled','vision_'+c.id+'_eject_enable_actual','vision_'+c.id+'_eject_enable_cmd',0,1,'',true)+'</article>'}document.getElementById('visionCards').innerHTML=html;
   document.addEventListener('click',function(event){var button=event.target.closest('[data-apply]');if(!button)return;var key=button.getAttribute('data-apply'),input=document.querySelector('[data-command="'+key+'"]'),value=input.type==='checkbox'?(input.checked?1:0):Number(input.value),min=Number(button.getAttribute('data-min')),max=Number(button.getAttribute('data-max'));writeCommand(key,value,min,max)});
 }
+function hexValue(v,width){var hex=Number(v).toString(16).toUpperCase();while(hex.length<width)hex='0'+hex;return '0x'+hex}
 function render(){
+  renderDehumidifier();
   var nodes=document.querySelectorAll('[data-value]'),i,key,v,input,badge;
   document.getElementById('pocket-calibration').textContent=!isOn(latest.vfd_pocket_connected)?'Waiting for VFD telemetry.':latest.vfd_pocket_pockets_per_min===null||latest.vfd_pocket_pockets_per_min===undefined?'Pocket conversion pending mechanical calibration.':'';
   for(i=0;i<nodes.length;i++){key=nodes[i].getAttribute('data-value');v=safeValue(latest[key]);if(nodes[i].querySelector('small'))nodes[i].childNodes[0].nodeValue=v+' ';else nodes[i].textContent=v}
